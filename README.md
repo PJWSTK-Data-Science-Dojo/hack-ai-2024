@@ -79,13 +79,13 @@ After that let's allow user to query for specific data using schema:
 
 ```mermaid
 graph LR
-    A[User question] --> B(LLM generates query for vector store)
-    B --> Z("Query Vector Store and respond to user task")
-    Z --> C("Query vector store")
-    C{"Does it respond to user task?"}
-    C-- No --> D(LLM tells what is missing in response)
+    A[User question] --> B[LLM generates query for vector store]
+    B --> Z["Query Vector Store and respond to user task"]
+    Z --> C["Query vector store"]
+    C["Does it respond to user task?"]
+    C-- No --> D[LLM tells what is missing in response]
     D --> B
-    C -- Yes --> F(Respond to user)
+    C -- Yes --> F[Respond to user]
 ```
 
 ## Propozycja wizaulizacji
