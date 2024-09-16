@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "dsc_hackai"
+version = "0.1.0"
+description = "Summarize video with usage of visual data and audio data"
+authors = ["DSC"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.10.13"
+ollama = "^0.3.3"
+gradio-client = "^1.3.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+main = "dsc_hackai.main:main"
