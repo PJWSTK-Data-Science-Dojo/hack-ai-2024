@@ -19,7 +19,7 @@ Transcription with speaker ids, loud timestamps ranges, quiet timestamps ranges
 
 Transform video to audio
 Build spectogram - we will know when it's loud, when quiet
-Send whole audio to WhisparX - respond should be timestamped
+Send whole audio to WhisperX - respond should be timestamped
 
 Save this to list with: (response, metadata: {start_timestamp, is_loud, is_quiet})
 
@@ -44,7 +44,7 @@ Now respond with overlayed outputs formatted as described below:
             "start_time": 0.05,
             "end_time": 0.25,
             "subject": "subject_1",
-            "speakers": ["speaker_1", "speaker_2"],
+            "speakers": ["speaker_1", "speaker_2"]
         }
     ],
     "themes": [
@@ -52,7 +52,7 @@ Now respond with overlayed outputs formatted as described below:
             "description": "theme_1",
             "start_time": 0.5,
             "end_time": 5
-        }
+        },
         {
             "description": "theme_2",
             "start_time": 2,
@@ -62,7 +62,7 @@ Now respond with overlayed outputs formatted as described below:
     "highlights": [
         {
             "description": "highlight_1",
-            "reason": "reason_1",
+            "reason": "reason_1"
         }
     ]
 }
@@ -88,6 +88,6 @@ graph LR
     C -- Yes --> F[Respond to user]
 ```
 
-## Propozycja wizaulizacji
+## Propozycja wizualizacji
 Po wgraniu video ui pozwala na zadawanie pytań już zaraz po rozpoczęciu analizy audio i video (pokazujemy progress analizy audio i video w trybie live - podczas analizy będziemy zapisywać "snapshoty" vector store).
 użytkownik może wpisywać pytanie do podsumowania i otrzymywać je na bazie aktualnego stanu vector store.
