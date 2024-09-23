@@ -1,110 +1,158 @@
-from subprocess import Popen, PIPE, run
 import time
 import tempfile
 import requests
 import pathlib
+import subprocess
 import ollama
-from gradio_client import Client, handle_file
+import logging
+import base64
+from io import BytesIO
+from PIL import Image
+
+import faiss
+from langchain_core.documents import Document
+from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from langchain_community.vectorstores import FAISS, VectorStore
+
+model_name = "intfloat/multilingual-e5-small"
+
+embeddings = HuggingFaceBgeEmbeddings(model_name=model_name)
 
 
-def describe_chunk_w_llava_next(video_file_path):
+def add_to_vector_store(doc: Document, data_vector_store=None) -> VectorStore:
+    """Generates a vector store from a list of segments."""
+    logging.debug("Adding to vector store")
+
+    docs = [doc]
+    if data_vector_store is None:
+        data_vector_store = FAISS.from_documents(docs, embeddings)
+    else:
+        data_vector_store.add_documents([doc])
+    logging.debug("Video vector store updated!")
+    logging.info(f"Current videos dict {data_vector_store.docstore._dict}")
+    return data_vector_store
+
+
+def process_halves(arr, start=0, end=None, depth=0):
+    res = []
+    if end is None:
+        end = len(arr)
+
+    # Base case: if there's only one element, just print that element
+    if end - start <= 1:
+        if len(arr[start:end]) > 0:
+            res.append(arr[start:end])
+        return None
+
+    # Find the middle index
+    mid = (start + end) // 2
+
+    # Print the element at the middle index (this is how we "process" it)
+    res.append(arr[mid])
+
+    # Recursively process the left and right halves
+    l_res = process_halves(arr, start, mid, depth + 1)  # Process the left half
+    r_res = process_halves(arr, mid + 1, end, depth + 1)  # Process the right half
+
+    if l_res is not None:
+        res.extend(l_res)
+    if r_res is not None:
+        res.extend(r_res)
+    return res
+
+
+def convert_to_base64(pil_image):
     """
-    Using LLAVA One V
-    https://llava-onevision.lmms-lab.com/?
+    Convert PIL images to Base64 encoded strings
+
+    :param pil_image: PIL image
+    :return: Base64 string
     """
-    client = requests.Session()
-    client.headers.update({"Content-Type": "application/json"})
-    url = "https://llava-onevision.lmms-lab.com/add_text_1"
-
-    video_file_path = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
-    files = {"video": handle_file(video_file_path)}
-    data = {
-        "messages": {"text": "Describe video", "files": []},
-        "image_process_mode": "Default",
-    }
-
-    response = client.post(url, data=data, files=files)
-    result = response.json()
-    return result
+    buffered = BytesIO()
+    pil_image.save(buffered, format="JPEG")  # You can change the format if needed
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return img_str
 
 
-def split_video_chunks(video_file_path, tmpdir):
+def describe_frame_ollama(image_path: str, question: str):
+    ollama_client = ollama.Client(host="192.168.1.42:11435")
+    res = ollama_client.generate(
+        model="minicpm-v:8b",
+        options={"temperature": 0.07},
+        images=[convert_to_base64(Image.open(image_path))],
+        prompt=question
+        + ". Respond with up to 3 senteces, do not make any additional remarks.",
+    )["response"]
+    return res
+
+
+def split_video_to_frames(video_file_path, tmpdir):
     """
-    Split video into 10-second chunks and save them in tmpdir.
+    Split video into frames, one per second.
     """
     input_video = video_file_path
-    output_format = "mp4"
-    chunk_duration = 10.0  # in seconds
+    output_format = "jpg"
 
     # Construct the ffmpeg command for segmenting the video
-    segment_name_template = "video_%04d"  # Template for output filenames
-    ffmpeg_cmd = (
-        f"ffmpeg -i {input_video} -c copy -map 0 -f segment "
-        f"-segment_time {chunk_duration} -reset_timestamps 1 "
-        f"{tmpdir}/{segment_name_template}.{output_format}"
-    )
+    segment_name_template = "frame_%04d"  # Template for output filenames
+
+    ffmpeg_cmd = f'ffmpeg -i {input_video} -vf "fps=1" {tmpdir}/{segment_name_template}.{output_format}'
 
     # Execute the ffmpeg command
-    run(ffmpeg_cmd, shell=True)
-
-
-def describe_each_frame_ollama(frame_file_path):
-    res = ollama.chat(
-        model="llava",
-        messages=[
-            {
-                "role": "user",
-                "content": "Describe this image:",
-                "images": [frame_file_path],
-            }
-        ],
+    subprocess.run(
+        ffmpeg_cmd,
+        shell=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
-    print(res["message"]["content"])
 
 
-def split_frames(video_file_path, tmpdir: tempfile.TemporaryDirectory):
-    # Use FFmpeg to cut the source video into frames and save them to the temporary directory
-    ffmpeg_cmd = [
-        "ffmpeg",
-        "-i",
-        video_file_path,
-        "-vf",
-        "fps=1",
-        str(pathlib.Path(tmpdir.name)) + "/frame_%04d.jpg",
-    ]
-
-    run(ffmpeg_cmd, check=True)
-    return True
+VIDEO_QUESTIONS = [
+    {"name": "object_detection", "q": "what objects can you see"},
+    {"name": "ocr", "q": "what text is visible in image"},
+    {"name": "emotion_recognition", "q": "what emotions are shown"},
+    {"name": "motion_detection", "q": "how are objects moving"},
+    # {"name": "camera_motion", "q": "how is the camera moving"},
+    # {"name": "view_changes", "q": "were there multiple changes in view"},
+    # {"name": "frame_description", "q": "what is in the frame"},
+]
 
 
 def process_vision(video_file_path):
+    start_time = time.time()
     tmpdir_vids = pathlib.Path("test_vid")
     tmpdir_vids.mkdir(exist_ok=True)
-    # tmpdir_vids = tempfile.TemporaryDirectory(dir="test_vid")
-    # Whole Video split to chunks
-    split_video_chunks(video_file_path, tmpdir_vids)
-    # Get a list of all frames in the temporary director
 
-    video_chunks_frames = [str(f) for f in pathlib.Path(tmpdir_vids).glob("*.mp4")]
+    # logging.info(f"Chunking video to frames")
+    # split_video_to_frames(video_file_path, tmpdir_vids)
+    # logging.info(f"Video chunked to frames")
 
-    # Send requests with each frame to the phi3-llava model using ollama
-    print(tmpdir_vids.name)
-    for video_chunk_file in video_chunks_frames:
-        print(video_chunk_file)
-        print(describe_chunk_w_llava_next(video_chunk_file))
+    video_frames = sorted([str(f) for f in pathlib.Path(tmpdir_vids).glob("*.jpg")])
+    video_frames = process_halves(video_frames)
 
-    tmpdir_vids.cleanup()
+    video_processing_results = []
+    video_vector_store = None
 
-    # Create a temporary directory to store the video frames
-    tmpdir = tempfile.TemporaryDirectory()
-    # Frames
-    split_frames(video_file_path, tmpdir)
+    # Process each video chunk
+    logging.info(f"Processing video frames")
+    for idx, video_frame_file_path in enumerate(video_frames):
 
-    # Get a list of all frames in the temporary directory
-    frame_files = [str(f) for f in pathlib.Path(tmpdir.name).glob("*.jpg")]
-
-    # Send requests with each frame to the phi3-llava model using ollama
-    for frame_file in frame_files:
-        describe_each_frame_ollama(frame_file)
-
-    tmpdir.cleanup()
+        frame_ts = int(str(pathlib.Path(video_frame_file_path).stem).split("_")[1])
+        logging.info(f"Processing frame {idx} | {len(video_frames)} (ts: {frame_ts})")
+        res = {}
+        for q in VIDEO_QUESTIONS:
+            try:
+                res[q["name"]] = describe_frame_ollama(video_frame_file_path, q["q"])
+            except Exception as e:
+                logging.error("Error processing frame", video_frame_file_path)
+        frame_document = Document(
+            page_content=". ".join(res[key] for key in res.keys()),
+            metadata={"start_ts": frame_ts - 1, "end_ts": frame_ts},
+        )
+        video_vector_store = add_to_vector_store(frame_document, video_vector_store)
+        video_processing_results.append(res)
+    end_time = time.time()
+    delta_time = end_time - start_time
+    logging.info(f"Processed video frames")
+    logging.info(f"Time spent processing video: {delta_time:.2f}")
+    return video_processing_results
