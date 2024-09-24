@@ -1,3 +1,7 @@
+.idea
 __pycache__
+.DS_Store
+.env
+TODO
 .pytest_cache
 dsc_hackai/processed_video
