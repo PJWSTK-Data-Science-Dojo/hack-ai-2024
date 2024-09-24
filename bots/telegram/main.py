@@ -68,7 +68,7 @@ async def process_user_interaction(user_id, user_message, update: Update):
 async def handle_message(update: Update, context):
     user_id = update.message.from_user.id
     user_message = update.message.text
-
+    print(f"{type(user_id)=}")
     # non-blocking asyncio task. Do not use await
     asyncio.create_task(process_user_interaction(user_id, user_message, update))
 
@@ -82,8 +82,8 @@ if __name__ == '__main__':
 
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    filter_users = TypeHandler(Update, whitelist_user)
-    app.add_handler(filter_users, -1)
+    # filter_users = TypeHandler(Update, whitelist_user)
+    # app.add_handler(filter_users, -1)
 
     # Commands
     app.add_handler(CommandHandler("start", start))
