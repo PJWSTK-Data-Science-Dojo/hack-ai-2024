@@ -15,10 +15,13 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_community.vectorstores import FAISS, VectorStore
 
 VIDEO_QUESTIONS = [
-    {"name": "object_detection", "q": "what objects can you see"},
-    {"name": "ocr", "q": "what text is visible in image"},
-    {"name": "emotion_recognition", "q": "what emotions are shown"},
-    {"name": "motion_detection", "q": "how are objects moving"},
+    {"name": "object_detection", "q": "What objects can you spot"},
+    {
+        "name": "ocr",
+        "q": "What text is visible in image. If none respond with empty string",
+    },
+    {"name": "emotion_recognition", "q": "What emotions are shown"},
+    {"name": "motion_detection", "q": "How are objects moving"},
     # {"name": "camera_motion", "q": "how is the camera moving"},
     # {"name": "view_changes", "q": "were there multiple changes in view"},
     # {"name": "frame_description", "q": "what is in the frame"},

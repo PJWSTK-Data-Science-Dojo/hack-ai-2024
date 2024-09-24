@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import logging
 import uvicorn
 import pathlib
@@ -6,6 +7,8 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from uuid import uuid4
 from dsc_hackai.processing import Processing
 import shutil
+from pydantic import BaseModel
+from typing import List
 
 app = FastAPI()
 
@@ -36,7 +39,11 @@ def shutdown_event():
     remove_directory(str(workspace_dir))
 
 
-@app.post("/api/v1/analysis")
+class AnalysisResponse(BaseModel):
+    process_id: str
+
+
+@app.post("/api/v1/analysis", response_model=AnalysisResponse, tags=["Analysis"])
 async def upload_video(video_file: UploadFile = File(...)):
     global jobs
 
@@ -52,6 +59,17 @@ async def upload_video(video_file: UploadFile = File(...)):
     return {"process_id": process_id}
 
 
+class AnalysisStage(BaseModel):
+    stage: str
+    time: datetime
+
+
+class AnalysisStageResponse(BaseModel):
+    frames_processed: int
+    frames_all: int
+    stages: List[AnalysisStage]
+
+
 @app.get("/api/v1/analysis/stage/{process_id}")
 async def get_processing_status(process_id: str):
     global jobs
@@ -61,12 +79,15 @@ async def get_processing_status(process_id: str):
     raise HTTPException(status_code=404, detail="Process not found.")
 
 
+# class AnalysisDataResponse(BaseModel):
+
+
 @app.get("/api/v1/analysis/data/{process_id}")
 async def get_processing_status(process_id: str):
     global jobs
     for job in jobs:
         if str(job.id) == process_id:
-            return {job._data}
+            return job.get_processing_data()
     raise HTTPException(status_code=404, detail="Process not found.")
 
 

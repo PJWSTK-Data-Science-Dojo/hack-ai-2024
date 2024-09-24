@@ -66,7 +66,7 @@ def analyze_audio(file_path):
 class AudioProcessing:
     def __init__(self):
         self.audio_vector_store = None
-        self.audio_processing_results = []
+        self.audio_processing_results = {}
 
     def generate_vector_store(self, segements) -> VectorStore:
         """Generates a vector store from a list of segments."""
@@ -126,5 +126,9 @@ class AudioProcessing:
         delta_time = end_time - start_time
         logging.info(f"Time spent processing audio: {delta_time:.2f}")
 
+        self.audio_processing_results = {
+            "transcription": transcription,
+            "loudness": loudness_data,
+        }
         self.generate_vector_store(transcription["segments"])
         # vs.save_local(pathlib.Path(video_path.parent, "audio_data_vectore_store"))

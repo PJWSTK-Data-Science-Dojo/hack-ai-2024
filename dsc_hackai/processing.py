@@ -4,7 +4,7 @@ import pathlib
 
 from dsc_hackai.process_vision import VisionProcessing
 from dsc_hackai.process_audio import AudioProcessing
-from dsc_hackai.processing_llm import query_llm
+from dsc_hackai.process_llm import query_llm
 import ollama
 
 from fastapi import FastAPI, HTTPException
@@ -28,15 +28,19 @@ class Processing:
         self.vision_processing = VisionProcessing()
         self.audio_processing = AudioProcessing()
 
-        self._data = {}
-
     async def get_processing_stage(self):
         return {
-            "video_frame_processed": len(
+            "video_frames_processed": len(
                 self.vision_processing.video_processing_results
             ),
-            "all_video_frames": self.vision_processing.video_processing_all_frames_count,
+            "video_frames_all": self.vision_processing.video_processing_all_frames_count,
             "stages": self.stages,
+        }
+
+    def get_processing_data(self):
+        return {
+            "video": self.vision_processing.video_processing_results,
+            "audio": self.audio_processing.audio_processing_results,
         }
 
     async def start(self, video_file, workspace_dir):
