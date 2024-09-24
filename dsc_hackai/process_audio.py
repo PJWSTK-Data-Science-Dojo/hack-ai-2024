@@ -12,29 +12,10 @@ from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_community.vectorstores import FAISS, VectorStore
 
-from dsc_hackai.api.whisperx import whisperx_endpoint
+from dsc_hackai.machine_learning_apis.whisperx import whisperx_endpoint
 
 model_name = "intfloat/multilingual-e5-small"
-
-
-def generate_vector_store(segements) -> VectorStore:
-    """Generates a vector store from a list of segments."""
-    logging.debug("Generating vector store")
-    documents = []
-    for segment_dict in segements:
-        doc = Document(
-            page_content=segment_dict["text"],
-            metadata={
-                "speaker_id": segment_dict["speaker"],
-                "start_ts": segment_dict["start"],
-                "end_ts": segment_dict["end"],
-            },
-        )
-        documents.append(doc)
-    # Setup Model
-    vector_store = FAISS.from_documents(documents, embeddings)
-    logging.debug("Vector store generated!")
-    return vector_store
+embeddings = HuggingFaceBgeEmbeddings(model_name=model_name)
 
 
 def analyze_audio(file_path):
@@ -82,56 +63,68 @@ def analyze_audio(file_path):
     return chunks
 
 
-def process_audio(video_path: pathlib.Path):
-    """
-    Run pipeline to get data from audio.
-    """
-    # start_time = time.time()
-    # wav_audio_path = video_path.with_suffix(".wav")
-    # logging.info("Splitting audio to chunks")
-    # subprocess.run(
-    #     [
-    #         "ffmpeg",
-    #         "-i",
-    #         video_path,
-    #         "-vn",
-    #         "-acodec",
-    #         "pcm_s16le",
-    #         "-y",
-    #         wav_audio_path,
-    #     ],
-    #     stdout=subprocess.DEVNULL,
-    #     stderr=subprocess.DEVNULL,
-    # )
-    # logging.info("Splitted audio to chunks")
+class AudioProcessing:
+    def __init__(self):
+        self.audio_vector_store = None
+        self.audio_processing_results = []
 
-    # # Transcribe audio file to text
-    # logging.info("Running transcription")
-    # whisperx_inf = whisperx_endpoint()
-    # transcription = whisperx_inf.inference(wav_audio_path)
-    # if transcription is None:
-    #     raise RuntimeError("Transcription failed")
-    # logging.info("Transcription done")
+    def generate_vector_store(self, segements) -> VectorStore:
+        """Generates a vector store from a list of segments."""
+        logging.debug("Generating vector store")
+        documents = []
+        for segment_dict in segements:
+            doc = Document(
+                page_content=segment_dict["text"],
+                metadata={
+                    "speaker_id": segment_dict["speaker"],
+                    "start_ts": segment_dict["start"],
+                    "end_ts": segment_dict["end"],
+                },
+            )
+            documents.append(doc)
+        # Setup Model
+        vector_store = FAISS.from_documents(documents, embeddings)
+        logging.debug("Vector store generated")
+        self.audio_vector_store = vector_store
 
-    # # Generate Loud / Silent labels
-    # logging.info("Generate Loud / Silent labels")
-    # loudness_data = analyze_audio(wav_audio_path)
-    # logging.info("Generated Loud / Silent labels")
-    # end_time = time.time()
-    # delta_time = end_time - start_time
-    # logging.info(f"Time spent processing audio: {delta_time:.2f}")
+    def process_audio(self, video_path: pathlib.Path):
+        """
+        Run pipeline to get data from audio.
+        """
+        start_time = time.time()
+        wav_audio_path = video_path.with_suffix(".wav")
+        logging.info("Splitting audio to chunks")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-i",
+                video_path,
+                "-vn",
+                "-acodec",
+                "pcm_s16le",
+                "-y",
+                wav_audio_path,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logging.info("Splitted audio to chunks")
 
-    data = {}
-    # Open the file and load JSON data
-    with open(video_path.with_suffix(".audio.json"), "r") as json_file:
-        data = json.load(json_file)
-    transcription = data["transcription"]
-    loudness_data = data["loudness"]
-    vs = generate_vector_store(transcription["segments"])
-    return (
-        {
-            "transcription": transcription,
-            "loudness": loudness_data,
-        },
-        vs,
-    )
+        # Transcribe audio file to text
+        logging.info("Running transcription")
+        whisperx_inf = whisperx_endpoint()
+        transcription = whisperx_inf.inference(wav_audio_path)
+        if transcription is None:
+            raise RuntimeError("Transcription failed")
+        logging.info("Transcription done")
+
+        # Generate Loud / Silent labels
+        logging.info("Generate Loud / Silent labels")
+        loudness_data = analyze_audio(wav_audio_path)
+        logging.info("Generated Loud / Silent labels")
+        end_time = time.time()
+        delta_time = end_time - start_time
+        logging.info(f"Time spent processing audio: {delta_time:.2f}")
+
+        self.generate_vector_store(transcription["segments"])
+        # vs.save_local(pathlib.Path(video_path.parent, "audio_data_vectore_store"))
