@@ -1,14 +1,14 @@
 specVersion: v2
 specMinorVersion: 1
 meta:
-  name: agentic-rag
-  image: project-agentic-rag
-  description: An example project for advanced RAG using agents
+  name: deep-video
+  image: project-deep-video
+  description: Project for video analysis
   labels: []
-  createdOn: "2024-07-15T21:09:46Z"
+  createdOn: "2024-09-15T18:00:00Z"
   defaultBranch: main
 layout:
-- path: code/
+- path: dsc_hackai/
   type: code
   storage: git
 - path: models/
@@ -22,76 +22,21 @@ layout:
   storage: gitignore
 environment:
   base:
-    registry: nvcr.io
-    image: nvidia/ai-workbench/pytorch:1.0.2
+    registry: docker.io
+    image: pytorch/pytorch:2.3.1-cuda11.8-cudnn8-runtime
     build_timestamp: "20231102150513"
     name: PyTorch
     supported_architectures: []
-    cuda_version: "12.2"
-    description: A Pytorch 2.1 Base with CUDA 12.2
+    cuda_version: "11.8"
+    description: A Pytorch 2.3.1 Base with CUDA 11.8
     entrypoint_script: ""
     labels:
-    - cuda12.2
-    - pytorch2.1
-    apps:
-    - name: chat
-      type: custom
-      class: webapp
-      start_command: cd /project/code/ && PROXY_PREFIX=$PROXY_PREFIX python3 -m chatui
-      health_check_command: curl -f "http://localhost:8080/"
-      stop_command: pkill -f "^python3 -m chatui"
-      user_msg: ""
-      logfile_path: ""
-      timeout_seconds: 0
-      icon_url: ""
-      webapp_options:
-        autolaunch: true
-        port: "8080"
-        proxy:
-          trim_prefix: true
-        url: http://localhost:8080/
-    - name: jupyterlab
-      type: jupyterlab
-      class: webapp
-      start_command: jupyter lab --allow-root --port 8888 --ip 0.0.0.0 --no-browser
-        --NotebookApp.base_url=\$PROXY_PREFIX --NotebookApp.default_url=/lab --NotebookApp.allow_origin='*'
-      health_check_command: '[ \$(echo url=\$(jupyter lab list | head -n 2 | tail
-        -n 1 | cut -f1 -d'' '' | grep -v ''Currently'' | sed "s@/?@/lab?@g") | curl
-        -o /dev/null -s -w ''%{http_code}'' --config -) == ''200'' ]'
-      stop_command: jupyter lab stop 8888
-      user_msg: ""
-      logfile_path: ""
-      timeout_seconds: 0
-      icon_url: ""
-      webapp_options:
-        autolaunch: true
-        port: "8888"
-        proxy:
-          trim_prefix: false
-        url_command: jupyter lab list | head -n 2 | tail -n 1 | cut -f1 -d' ' | grep
-          -v 'Currently'
-    - name: tensorboard
-      type: tensorboard
-      class: webapp
-      start_command: tensorboard --logdir \$TENSORBOARD_LOGS_DIRECTORY --path_prefix=\$PROXY_PREFIX
-        --bind_all
-      health_check_command: '[ \$(curl -o /dev/null -s -w ''%{http_code}'' http://localhost:\$TENSORBOARD_PORT\$PROXY_PREFIX/)
-        == ''200'' ]'
-      stop_command: pkill tensorboard
-      user_msg: ""
-      logfile_path: ""
-      timeout_seconds: 0
-      icon_url: ""
-      webapp_options:
-        autolaunch: true
-        port: "6006"
-        proxy:
-          trim_prefix: false
-        url: http://localhost:6006
+    - cuda11.8
+    - pytorch2.3
     programming_languages:
     - python3
     icon_url: ""
-    image_version: 1.0.2
+    image_version: 2.3.1
     os: linux
     os_distro: ubuntu
     os_distro_release: "22.04"
@@ -120,12 +65,7 @@ execution:
   resources:
     gpu:
       requested: 1
-    sharedMemoryMB: 1024
-  secrets:
-  - variable: NVIDIA_API_KEY
-    description: NVIDIA API Key for accessing the API catalog
-  - variable: TAVILY_API_KEY
-    description: Tavily Search API Key
+    sharedMemoryMB: 4096
   mounts:
   - type: project
     target: /project/
