@@ -3,3 +3,7 @@ whisperx
 git+https://github.com/huggingface/transformers
 accelerate>=0.26.0
 streamlit
+moviepy
+pysrt
+pytubefix
+Jinja2
