@@ -2,9 +2,9 @@ import logging
 import threading
 import pathlib
 
-from dsc_hackai.process_vision import VisionProcessing
-from dsc_hackai.process_audio import AudioProcessing
-from dsc_hackai.process_llm import query_llm
+from process_vision import VisionProcessing
+from process_audio import AudioProcessing
+from process_llm import query_llm
 import ollama
 
 from fastapi import FastAPI, HTTPException

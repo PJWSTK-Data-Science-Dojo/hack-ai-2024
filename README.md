@@ -91,3 +91,6 @@ graph LR
 ## Propozycja wizualizacji
 Po wgraniu video ui pozwala na zadawanie pytań już zaraz po rozpoczęciu analizy audio i video (pokazujemy progress analizy audio i video w trybie live - podczas analizy będziemy zapisywać "snapshoty" vector store).
 użytkownik może wpisywać pytanie do podsumowania i otrzymywać je na bazie aktualnego stanu vector store.
+
+## Required data
+https://hf.co/pyannote/speaker-diarization 

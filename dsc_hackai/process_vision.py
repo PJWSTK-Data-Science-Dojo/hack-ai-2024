@@ -3,9 +3,7 @@ import tempfile
 import requests
 import pathlib
 import subprocess
-import ollama
 import logging
-import base64
 from io import BytesIO
 from PIL import Image
 
@@ -13,6 +11,9 @@ import faiss
 from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_community.vectorstores import FAISS, VectorStore
+
+from machine_learning_apis.llm import llm_endpoint
+llm_end = llm_endpoint()
 
 VIDEO_QUESTIONS = [
     {"name": "object_detection", "q": "What objects can you spot"},
@@ -29,31 +30,6 @@ VIDEO_QUESTIONS = [
 
 model_name = "intfloat/multilingual-e5-small"
 embeddings = HuggingFaceBgeEmbeddings(model_name=model_name)
-
-
-def convert_to_base64(pil_image):
-    """
-    Convert PIL images to Base64 encoded strings
-
-    :param pil_image: PIL image
-    :return: Base64 string
-    """
-    buffered = BytesIO()
-    pil_image.save(buffered, format="JPEG")  # You can change the format if needed
-    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    return img_str
-
-
-def describe_frame_ollama(image_path: str, question: str):
-    ollama_client = ollama.Client(host="192.168.1.42:11435")
-    res = ollama_client.generate(
-        model="minicpm-v:8b",
-        options={"temperature": 0.07},
-        images=[convert_to_base64(Image.open(image_path))],
-        prompt=question
-        + ". Respond with up to 3 senteces, do not make any additional remarks.",
-    )["response"]
-    return res
 
 
 def split_video_to_frames(video_file_path, tmpdir):
@@ -146,7 +122,7 @@ class VisionProcessing:
             res = {}
             for q in VIDEO_QUESTIONS:
                 try:
-                    res[q["name"]] = describe_frame_ollama(
+                    res[q["name"]] = llm_end.inference_image(
                         video_frame_file_path, q["q"]
                     )
                 except Exception as e:

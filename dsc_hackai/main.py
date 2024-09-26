@@ -5,7 +5,7 @@ import uvicorn
 import pathlib
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from uuid import uuid4
-from dsc_hackai.processing import Processing
+from processing import Processing
 import shutil
 from pydantic import BaseModel
 from typing import List
@@ -16,27 +16,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)-s %(message)s")
 
 jobs = []
 workspace_dir = pathlib.Path(
-    "/Users/daniel/Developer/_DEVELOPED_APPS/_PJATK/DSC_HACKAI/dsc_hackai/processed_video"
+    "/project/data"
 )
-
-
-def remove_directory(dir_path):
-    try:
-        shutil.rmtree(dir_path)
-        print(f"Directory '{dir_path}' and its contents have been deleted.")
-    except OSError as e:
-        print(f"Error: {e}")
-
-
-@app.on_event("startup")
-def startup_event():
-    remove_directory(str(workspace_dir))
-    workspace_dir.mkdir(parents=True, exist_ok=True)
-
-
-@app.on_event("shutdown")
-def shutdown_event():
-    remove_directory(str(workspace_dir))
+workspace_dir.mkdir(parents=True, exist_ok=True)
 
 
 class AnalysisResponse(BaseModel):
@@ -102,7 +84,14 @@ async def ask_about_video(process_id: str, request: Request):
             return {"response": response}
     raise HTTPException(status_code=404, detail="Process not found.")
 
+@app.post("/api/v1/register")
+async def register():
+    pass
+
+@app.post("/api/v1/login")
+async def login():
+    pass
 
 # Run the FastAPI application on port 5000
-# if __name__ == "__main__":
-#   uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=False, access_log=False)
+if __name__ == "__main__":
+  uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=False, access_log=False)
