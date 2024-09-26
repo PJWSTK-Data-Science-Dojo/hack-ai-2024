@@ -1,84 +1,98 @@
-from dataclasses import dataclass, field
-import enum
-from typing import List, Tuple
+import logging
+from typing import List, Union
 import json
+from jsonschema import validate
+import jsonschema
 import requests
+from classes_toolkit import Video, User, States
 
 
 # from the server i would like to have get_info(user_id), which returns json object. Based on which we can create
 # User dataclass
 
 # my_videos -> WAITING_FOR_VIDEO, user needs to choose video from the list, after info -> VIEWING_SUMMARY uses llm
-# summarize + ctx(video link, or video file)  -> WAITING_FOR_PROCESSED_DATA (works only for new videos)
+# summarize + ctx(video link, or video file )  -> WAITING_FOR_PROCESSED_DATA (works only for new videos)
 # summary ctx(id of the video) ->  WAITING_FOR_VIDEO after we got info -> VIEWING_SUMMARY which directly uses llm
 
-
-class States(enum.Enum):
-    WAITING_FOR_VIDEO = 1
-    WAITING_FOR_PROCESSED_DATA = 2
-
-    VIEWING_SUMMARY = 3
-    IDLE = 4
-    DOESNT_EXISTS = 5
-
-
-def create_user_from_data(data):
-    try:
-        json_data = json.loads(data)
-
-        if 'user_id' not in json_data:
-            raise ValueError("Missing 'user_id' in data")
-
-        if not isinstance(json_data['user_id'], int):
-            raise TypeError(f"Invalid type for user_id: expected int, got {type(json_data['user_id'])}")
-
-        if 'state' in json_data:
-            try:
-                json_data['state'] = States[json_data['state']]  # Convert to Enum
-            except KeyError:
-                raise ValueError(f"Invalid state: {json_data['state']}")
-        else:
-            json_data['state'] = States.IDLE  # Default state
-
-        # Validate and provide default values for optional fields
-        json_data['videos'] = json_data.get('videos', [])
-        if not isinstance(json_data['videos'], list):
-            raise TypeError(f"Invalid type for videos: expected list, got {type(json_data['videos'])}")
-
-        json_data['allowed_to_use'] = json_data.get('allowed_to_use', True)
-        if not isinstance(json_data['allowed_to_use'], bool):
-            raise TypeError(f"Invalid type for allowed_to_use: expected bool, got {type(json_data['allowed_to_use'])}")
-
-        # Create and return the User object
-        return User(**json_data)
-
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
-        return None
-    except (TypeError, ValueError) as e:
-        print(f"Error creating User from data: {e}")
-        return None
+# IDLE - User class has just been created.
+# DOESN'T_EXISTS - We checked both the local cache and the db for the user info, but the user still doesn't exist, We won't waste resources for next checks.
+# WAITING_FOR_VIDEO_ID - The User has used /my_videos command and is currently selecting the video for inference
+# WAITING_FOR_PROCESSED_DATA - The User has chosen a video, and we are now waiting for the data from the server. This state is also used when a user requests a new video summary.
+# VIEWING_SUMMARY - We have received the data from the server for the selected video. In this state, the user can ask questions to the LLM.
+# VIEWING_SUMMARY - can only be interrupted with the stop command, i dont have ideas how to do it the other way
 
 
 class UserManager:
-    def __init__(self):
+    def __init__(self, logger: 'Logger', user_schema: dict, video_schema: dict):
         self.user_contexts = {}
+        self.logging = logger
+        self.user_schema = user_schema
+        self.video_schema = video_schema
 
-    def get_user(self, user_id):
+    def validate_user_data(self, user_data) -> bool:
+        """Validate the JSON data using the JSON schema."""
+        try:
+            validate(instance=user_data, schema=self.user_schema)
+            logging.info("[validate_user_data] User data validation went okay")
+            return True
+        except jsonschema.exceptions.ValidationError as e:
+            self.logging.error(f"[validate_user_data] Schema validation error: {e}")
+            return False
+
+    def create_user_from_data(self, data: Union[str, dict]) -> User | None:
+        try:
+            if isinstance(data, str):
+                data = json.loads(data)
+
+            if not self.validate_user_data(data):
+                return None
+
+            data['state'] = States.IDLE
+
+            # Handle video if present
+            videos_data = data.get('videos', [])
+            validated_videos = []
+            for video in videos_data:
+                validated_videos.append(Video(**video))
+
+            user = User(
+                id=data['user_id'],
+                state=data['state'],
+                videos=validated_videos,
+                allowed_to_use=data.get('allowed_to_use', True)
+            )
+            self.logging.info(f"[create_user_from_data] User(ID: {user.id}) was created successfully")
+            return user
+
+        except json.JSONDecodeError as e:
+            self.logging.error(f"[create_user_from_data] Error decoding JSON: {e}")
+            return None
+        except (TypeError, ValueError) as e:
+            self.logging.error(f"[create_user_from_data] Error creating User from data: {e}")
+            return None
+
+    def get_user(self, user_id: int) -> User:
         if user_id in self.user_contexts:
+            self.logging.info(f"[get_user] User(ID: {user_id} received from cache)")
             return self.user_contexts.get(user_id)
 
-        # user_data = self.fetch_user_from_api(user_id)
-        #
-        # if user_data:
-        #     user = self.create_user_from_data(user_data)  # Create user object
-        #     self.user_contexts[user_id] = user  # Cache the user
-        #     return user
-        # else:
-        return None
+        user_data = self.fetch_user_from_api(user_id)
 
-    def fetch_user_from_api(self, user_id):
-        return None
+        if user_data:
+            user = self.create_user_from_data(user_data)
+            self.logging.info(f"[get_user] User(ID: {user_id}) received from api")
+            self.user_contexts[user_id] = user  # Cache the user
+            return user
+
+        # If the user is both not in the db nor in the cache, we create a User with DOESNT_EXISTS state
+        user = User(id=-1, state=States.DOESNT_EXISTS)
+        self.logging.warning(f"[get_user] User(ID: {user_id}) Doesn't exists")
+        self.user_contexts[user_id] = user
+        return user
+
+    def fetch_user_from_api(self, user_id: int) -> str | None:
+        return '{"user_id":' + str(
+            user_id) + ',"videos": [{"title": "Sample Video","process_id": "123","stage": "started_initialized"},{"title": "Sample Video2","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video3","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video4","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video5","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video6","process_id": "1234","stage": "started_initialized"}],"allowed_to_use": true}'
         # Simulate API call to fetch user data
         # response = requests.get(f"{API_ENDPOINT}/user/{user_id}")
         # if response.status_code == 200:
@@ -86,25 +100,64 @@ class UserManager:
         # else:
         #     return None
 
-    def add_video_to_user(self, user_id, video):
+    def validate_video_data(self, video_data: Union[dict, str]) -> bool:
+        """Validate the structure of video data before adding it to the user."""
+        if isinstance(video_data, str):
+            video_data = json.loads(video_data)
+        try:
+            validate(instance=video_data, schema=self.video_schema)
+            self.logging.info("[validate_video_data] Video data validation completed")
+            return True
+        except jsonschema.exceptions.ValidationError as e:
+            self.logging.error(f"[validate_video_data] Schema validation error: {e}")
+            return False
+
+    def add_video_to_user(self, user_id: int, video_data: Union[str, dict]) -> bool:
+        if not self.validate_video_data(video_data):
+            self.logging.error(f"[add_video_to_user] Invalid video data for User(ID: {user_id}).")
+            return
+
         user = self.get_user(user_id)
-        user.videos.append(video)
 
-    def get_user_videos(self, user_id):
-        user = self.get_user(user_id)
-        return user.videos
+        if user.state == States.DOESNT_EXISTS:
+            self.logging.warning(f"[add_video_to_user] Since User(ID: {user_id}) doesn't exists, can`t add video data.")
+            return False
+
+        try:
+            video = Video(**video_data)
+            user.videos.append(video)
+            self.logging.info(f"[add_video_to_user] Video '{video.title}' added to User(ID: {user_id}).")
+            return True
+        except (TypeError, ValueError) as e:
+            self.logging.error(f"[add_video_to_user] Error creating Video object to User(ID: {user_id}): {e}")
+            return False
 
 
-@dataclass
-class User:
-    user_id: int
-    state: States = States.IDLE
-    videos: List[Tuple[int, str]] = field(default_factory=list)  # is a list of video titles
-    allowed_to_use: bool = True
+def test_1():
+    logger = get_logger()
+    usm = UserManager(logger, user_schema, video_scheme)
+    string_data_user_str = '{"user_id": 12345,"videos": [{"title": "Sample Video","process_id": "123","stage": "VIEWING"}],"allowed_to_use": true}'
+    string_data_user_dict = {"user_id": 12345,
+                             "videos": [{"title": "Sample Video", "process_id": "123", "stage": "VIEWING"}],
+                             "allowed_to_use": True}
+    user = usm.create_user_from_data(string_data_user_dict)
+    print(user)
+    video_data_str = '{"title": "Sample Video","process_id": "1234","stage": "VIEWING"}'
+    video_data_dict = {"title": "Sample Video", "process_id": "1234", "stage": "VIEWING"}
+    usm.add_video_to_user(user.id, video_data_str)
+    print(usm.validate_video_data(video_data_dict))
+
+
+def test_2():
+    logger = get_logger()
+    usm = UserManager(logger, user_schema, video_scheme)
+    user_id = 302459865081577473
+    user = usm.get_user(user_id)
+    print(user)
+    print(user.videos)
 
 
 if __name__ == '__main__':
-    data = '{"user_id": 12345, "state": "IDLE", "videos": [[1, "video1.mp4"]], "allowed_to_use": true}'
-    user = create_user_from_data(data)
-
-    # Continue from data encoding/decoding and finish the usermanager
+    from settings import get_logger, user_schema, video_scheme
+    # test_1()
+    # test_2()

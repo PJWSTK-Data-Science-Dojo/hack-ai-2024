@@ -1,5 +1,7 @@
 import pathlib
 import os
+import sys
+
 from dotenv import load_dotenv
 from logging.config import dictConfig
 import logging
@@ -13,7 +15,7 @@ BASE_DIR = pathlib.Path(__file__).parent
 
 LOGGING_CONFIG = {
     "version": 1,
-    "disable_existing_loggers": False,  # Fixed typo
+    "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
             "format": "%(levelname)-10s - %(asctime)s - %(module)-15s : %(message)s"
@@ -26,7 +28,8 @@ LOGGING_CONFIG = {
         "console": {
             'level': "DEBUG",
             'class': "logging.StreamHandler",
-            'formatter': "standard"
+            'formatter': "verbose",
+            'stream': sys.stdout
         },
         "console2": {
             'level': "WARNING",
@@ -41,21 +44,63 @@ LOGGING_CONFIG = {
             'formatter': "verbose"
         },
     },
-    "loggers": {  # Fixed typo
+    "loggers": {
         "bot": {
             'handlers': ['console'],
-            "level": "INFO",  # Fixed typo
+            "level": "INFO",
             "propagate": False
         },
         "discord": {
             'handlers': ['console2', "file"],
-            "level": "INFO",  # Fixed typo
+            "level": "INFO",
             "propagate": False
         }
     }
 }
 
 dictConfig(LOGGING_CONFIG)
+
+user_schema = {
+    "type": "object",
+    "properties": {
+        "user_id": {"type": "integer"},
+        "state": {
+            "type": "string",
+        },
+        "videos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "process_id": {"type": "string"},
+                    "stage": {"type": "string"},
+                    "bullet_points": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["title", "process_id", "stage"]
+            }
+        },
+        "allowed_to_use": {"type": "boolean"}
+    },
+    "required": ["user_id"]
+}
+
+video_scheme = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "process_id": {"type": "string"},
+        "stage": {"type": "string"},
+        "bullet_points": {
+            "type": "array",
+            "items": {"type": "string"}
+        }
+    },
+    "required": ["title", "process_id", "stage"]
+}
 
 
 def get_logger(name="bot"):
