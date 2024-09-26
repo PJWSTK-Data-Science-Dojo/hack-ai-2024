@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_community.vectorstores import FAISS, VectorStore
 
-from dsc_hackai.machine_learning_apis.whisperx import whisperx_endpoint
+from machine_learning_apis.whisper import whisperx_endpoint
 
 model_name = "intfloat/multilingual-e5-small"
 embeddings = HuggingFaceBgeEmbeddings(model_name=model_name)
