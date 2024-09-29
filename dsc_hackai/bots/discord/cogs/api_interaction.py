@@ -3,13 +3,32 @@ import requests
 from discord.ext import commands
 import discord
 import os
-from typing import TYPE_CHECKING, List
-from classes_toolkit import States, Video
+from typing import TYPE_CHECKING, List, Optional
+from utils import States, Video, download_youtube_video, VideoDownloadState
 
 if TYPE_CHECKING:
     from ..user import UserManager
+
 API_ENDPOINT = os.getenv("endpoint")
 
+# async def download_video(ctx: "commands.Context") -> Tuple[VideoDownloadState, Optional[bytes]]:
+#     if not ctx.message.attachments:
+#         return -1
+#
+#     video = ctx.message.attachments[0]  # Assuming the first attachment is the video
+#     if video.content_type.startswith("video"):
+#         async with aiohttp.ClientSession() as session:
+#             async with session.get(video.url) as response:
+#                 if response.status == 200:
+#                     video_data = await response.read()
+#                     await ctx.send(f"Video {video.filename} downloaded successfully!")
+#                     return video_data
+#                 else:
+#                     await ctx.send("Failed to download the video.")
+#                     return None
+#     else:
+#         await ctx.send("The attachment is not a video!")
+#         return None
 
 class VideoPaginationView(discord.ui.View):
     def __init__(self, videos: List['Video'], ctx: commands.Context):
@@ -37,12 +56,6 @@ class VideoPaginationView(discord.ui.View):
             )
 
     async def update_embed(self):
-        # Create a new embed
-        # embed = discord.Embed(description="Say **/summary {video_id}**\n__Example:__ **/summary 1**", color=0x109319)
-        # embed.set_author(name="Deep Video", url="https://github.com/PJWSTK-Data-Science-Dojo/hack-ai-2024",
-        #                  icon_url=self.ctx.bot.user.avatar)
-
-        # Populate the embed with the current page of videos
         self.populate_embed()
 
         # Update button states (disable if on first or last page)
@@ -70,7 +83,7 @@ class VideoPaginationView(discord.ui.View):
         embed = discord.Embed(description="Say **/summary {video_id}**\n__Example:__ **/summary 1**", color=0x109319)
         embed.set_author(name="Deep Video", url="https://github.com/PJWSTK-Data-Science-Dojo/hack-ai-2024",
                          icon_url=self.ctx.bot.user.avatar)
-        embed.set_footer(text="Information requested by: {}".format(self.ctx.author.display_name))
+        embed.set_footer(text=f"Information requested by: {self.ctx.author.display_name}")
         self.embed = embed
         self.populate_embed()
         return self.embed
@@ -92,37 +105,117 @@ class API_interaction(commands.Cog):
 
     @commands.command()
     async def my_videos(self, ctx: commands.Context):
-        user_id = ctx.message.author.id
-        user = self.USM.get_user(user_id)
-
-        if user.state == States.DOESNT_EXISTS:
-            self.logging.warning(f"[/my_videos] User(ID: {user_id}) doesn't have rights to use the service")
-            await ctx.reply(f"You don't have access to the service.\n(requested by {user_id}")
-            return
-
+        user = ctx.user
         videos: List[Video] = user.videos
 
         if not videos:
-            self.logging.warning(f"[/my_videos] User(ID: {user_id}) doesn't have videos preprocessed")
-            await ctx.reply(f'No videos available for {user_id}\n Use /summarize command first.')
+            self.logging.warning(f"[/my_videos] User(ID: {user.id}) doesn't have videos preprocessed")
+            await ctx.reply(f'No videos available for {user.id}\n Use the **/summarize** command first.')
             return
 
         user.state = States.WAITING_FOR_VIDEO_ID
-        self.logging.info(f"[/my_videos] Successfully generated embed for user(ID: {user_id})")
+        self.logging.info(f"[/my_videos] Successfully generated embed for user(ID: {user.id})")
         view = VideoPaginationView(videos, ctx)
         embed = view.create_embed()
         view.message = await ctx.send(embed=embed, view=view)
 
     @commands.command()
-    async def show_state(self, ctx: commands.Context):
-        user = self.USM.get_user(ctx.message.author.id)
-        await ctx.send(user.state.name)
+    async def show_state(self, ctx: commands.Context): # delete this later, for development purposes only
+        await ctx.send(ctx.user.state.name)
 
     @commands.command()
-    async def summary(self, ctx: commands.Context, id: int):
-        self.logging.info(f"[/summary] {ctx.author.id} with argument {id}, type {type(id)}")
-        user = self.USM.get_user(user_id=ctx.author.id)
+    async def summary(self, ctx: commands.Context, video_id: int):
+        self.logging.info(f"[/summary] User(ID: {ctx.author.id}) with argument {video_id}, type {type(video_id)}")
+        user = ctx.user
+        video_id = video_id - 1
+        if not user.video_exists(video_id):
+            self.logging.error(f"[/summary] User(ID: {ctx.author.id}) has no videos.")
+            await ctx.reply(f"Wrong video id. Use the **/my_videos** to see which ids are available")
+            return
 
+        video = user.videos[video_id]
+
+        title, process_id, bullet_points = video.title, video.process_id, video.bullet_points
+        await ctx.send(f"{title}\n{process_id}\n{bullet_points}")
+        # here we should send an embed with pretty short description instead of generic ctx.send
+        user.state = States.VIEWING_SUMMARY
+        user.currently_viewing = video_id
+        self.USM.add_llm_user(user.id, process_id)
+        await ctx.send(f"You can now successfully query the llm for further questions regarding your video summarization.")
+
+    @commands.command()
+    async def stop(self, ctx: commands.Context) -> bool:
+        self.logging.info(f"[/stop] User(ID: {ctx.author.id})")
+
+        user = ctx.user
+        user.state = States.IDLE
+        did_remove = self.USM.delete_llm_user(user.id)
+        if not did_remove:
+            self.logging.error(f"[/stop] User(ID: {ctx.author.id}) somehow this user wasn't removed or he wasn't there in the first place")
+            return
+
+        current_video = user.get_currently_viewing_video()
+        current_title = current_video.title if current_video else "You're a cheater."
+
+        self.logging.info(f"[/stop] User(ID: {user.id}) Successfully stopped viewing the summary.")
+        await ctx.reply(f"You're no longer viewing the summary of a {current_title}")
+        return True
+
+    @commands.command()
+    async def summarize(self, ctx: commands.Context, video_link: Optional[str]):
+        self.logging.info(f"[/summarize] User(ID: {ctx.author.id}) with argument {video_link}, type {type(video_link)}")
+        user = ctx.user
+
+        self.logging.info(f"[/summarize] User(ID: {ctx.author.id}). Downloading of {video_link} started")
+        try:
+            did_download, info = await asyncio.to_thread(download_youtube_video, video_link, None)
+            self.logging.info(f"[/summarize] Download status: {did_download}, Info: {info}")
+            if did_download == 1:
+                self.logging.warning(f"[/summarize] User(ID: {ctx.author.id}). Tried to download age restricted content")
+                await ctx.reply("Prepare yourself. I`m going to tell your mom that you're trying to download 18+ video from youtube")
+                return
+            if did_download == 2:
+                self.logging.warning(f"[/summarize] User(ID: {ctx.author.id}). Error occurred {info}")
+                await ctx.reply(f"Something strange happened ||{info}||")
+                return
+
+            # else everything went ok
+            self.logging.info(f"[/summarize] User(ID: {ctx.author.id}). Video has been downloaded successfully")
+            user.state = States.WAITING_FOR_PROCESSED_DATA
+            # here send this to the server
+            # process_id = yadayada
+            await ctx.reply(f"Your video has been downloaded successfully and now it is being processed at the server. Please wait patiently")
+            # here we make like data = asyncio.create_task(coro) get the data
+            # self.USM.add_video_to_user(user.id, data)
+            user.state = States.VIEWING_SUMMARY
+            self.USM.add_llm_user(user.id, 1234)
+            await ctx.reply(f"You can now freely ask questions regarding your video.")
+
+        except Exception as e:
+            self.logging.error(f"[/summarize] User(ID: {ctx.author.id}). Error while downloading video: {str(e)}")
+            return
+
+    async def handle_llm_interaction(self, ctx):
+        # user = ctx.user
+        self.logging.info(f"[LLM Interaction] User(ID: {ctx.author.id}) sent a message: {ctx.message.content}")
+
+        # Perform LLM interaction and respond to user
+        llm_response = f"LLM Response to: {ctx.message.content}"
+        await ctx.send(llm_response)
+
+    @commands.command()
+    async def toggle_llm(self, ctx: commands.Context):
+        user = ctx.user
+        if user.state != States.VIEWING_SUMMARY:
+            user.state = States.VIEWING_SUMMARY
+            self.USM.add_llm_user(user.id)
+            self.logging.info(f"[/toggle_llm] switched state to viewing summary")
+            return
+        else:
+            user.state = States.IDLE
+            self.USM.delete_llm_user(user.id)
+            self.logging.info(f"[/toggle+llm] switched state to idle summary")
+            return
 
 
 async def setup(bot, logger, USM):

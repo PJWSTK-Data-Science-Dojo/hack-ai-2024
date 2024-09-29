@@ -4,7 +4,7 @@ import json
 from jsonschema import validate
 import jsonschema
 import requests
-from classes_toolkit import Video, User, States
+from utils import Video, User, States
 
 
 # from the server i would like to have get_info(user_id), which returns json object. Based on which we can create
@@ -28,6 +28,27 @@ class UserManager:
         self.logging = logger
         self.user_schema = user_schema
         self.video_schema = video_schema
+        self._using_llm = {}  # we store every user_id->process_id that currently llm
+
+    def is_using_llm(self, user_id: int) -> bool:
+        return user_id in self._using_llm
+
+    def add_llm_user(self, user_id: int, process_id: int) -> bool:
+        if user_id not in self._using_llm:
+            self._using_llm[user_id] = process_id
+            return True
+        return False
+
+    def delete_llm_user(self, user_id) -> bool:
+        if user_id in self._using_llm:
+            del self._using_llm[user_id]
+            return True
+        return False
+
+    def get_llm_process(self, user_id: int) -> int:
+        if not self.is_using_llm(user_id):
+            return -1
+        return self._using_llm.get(user_id)
 
     def validate_user_data(self, user_data) -> bool:
         """Validate the JSON data using the JSON schema."""
@@ -85,8 +106,8 @@ class UserManager:
             return user
 
         # If the user is both not in the db nor in the cache, we create a User with DOESNT_EXISTS state
-        user = User(id=-1, state=States.DOESNT_EXISTS)
-        self.logging.warning(f"[get_user] User(ID: {user_id}) Doesn't exists")
+        user = User(id=user_id, state=States.DOESNT_EXISTS, allowed_to_use=False)
+        self.logging.warning(f"[get_user] User(ID: {user_id}) Doesn't exists. Creating an empty object")
         self.user_contexts[user_id] = user
         return user
 
@@ -102,9 +123,10 @@ class UserManager:
 
     def validate_video_data(self, video_data: Union[dict, str]) -> bool:
         """Validate the structure of video data before adding it to the user."""
-        if isinstance(video_data, str):
-            video_data = json.loads(video_data)
         try:
+            if isinstance(video_data, str):
+                video_data = json.loads(video_data)
+
             validate(instance=video_data, schema=self.video_schema)
             self.logging.info("[validate_video_data] Video data validation completed")
             return True
@@ -129,35 +151,42 @@ class UserManager:
             self.logging.info(f"[add_video_to_user] Video '{video.title}' added to User(ID: {user_id}).")
             return True
         except (TypeError, ValueError) as e:
-            self.logging.error(f"[add_video_to_user] Error creating Video object to User(ID: {user_id}): {e}")
+            self.logging.error(f"[add_video_to_user] Error creating Video object for User(ID: {user_id}): {e}")
             return False
 
 
-def test_1():
-    logger = get_logger()
-    usm = UserManager(logger, user_schema, video_scheme)
-    string_data_user_str = '{"user_id": 12345,"videos": [{"title": "Sample Video","process_id": "123","stage": "VIEWING"}],"allowed_to_use": true}'
-    string_data_user_dict = {"user_id": 12345,
-                             "videos": [{"title": "Sample Video", "process_id": "123", "stage": "VIEWING"}],
-                             "allowed_to_use": True}
-    user = usm.create_user_from_data(string_data_user_dict)
-    print(user)
-    video_data_str = '{"title": "Sample Video","process_id": "1234","stage": "VIEWING"}'
-    video_data_dict = {"title": "Sample Video", "process_id": "1234", "stage": "VIEWING"}
-    usm.add_video_to_user(user.id, video_data_str)
-    print(usm.validate_video_data(video_data_dict))
-
-
-def test_2():
-    logger = get_logger()
-    usm = UserManager(logger, user_schema, video_scheme)
-    user_id = 302459865081577473
-    user = usm.get_user(user_id)
-    print(user)
-    print(user.videos)
+# def test_1():
+#     from settings import get_logger, user_schema, video_scheme
+#     logger = get_logger()
+#     usm = UserManager(logger, user_schema, video_scheme)
+#     string_data_user_str = '{"user_id": 12345,"videos": [{"title": "Sample Video","process_id": "123","stage": "VIEWING"}],"allowed_to_use": true}'
+#     string_data_user_dict = {"user_id": 12345,
+#                              "videos": [{"title": "Sample Video", "process_id": "123", "stage": "VIEWING"}],
+#                              "allowed_to_use": True}
+#     user = usm.create_user_from_data(string_data_user_dict)
+#     print(user)
+#     video_data_str = '{"title": "Sample Video","process_id": "1234","stage": "VIEWING"}'
+#     video_data_dict = {"title": "Sample Video", "process_id": "1234", "stage": "VIEWING"}
+#     usm.add_video_to_user(user.id, video_data_str)
+#     print(usm.validate_video_data(video_data_dict))
+#
+#
+# def test_2():
+#     from settings import get_logger, user_schema, video_scheme
+#     logger = get_logger()
+#     usm = UserManager(logger, user_schema, video_scheme)
+#     user_id = 302459865081577473
+#     user = usm.get_user(user_id)
+#     print(user)
+#     print(user.videos)
 
 
 if __name__ == '__main__':
     from settings import get_logger, user_schema, video_scheme
+    usm = UserManager(get_logger("bot"), user_schema, video_scheme)
+    print(usm.add_llm_user(123, 1))
+    print(usm.is_using_llm(123))
+    print(usm.delete_llm_user(123))
+    print(usm.is_using_llm(123))
     # test_1()
     # test_2()

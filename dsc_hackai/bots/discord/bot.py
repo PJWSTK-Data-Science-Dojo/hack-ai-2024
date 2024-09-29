@@ -3,6 +3,11 @@ import discord
 import settings
 from cogs import api_interaction
 from user import UserManager
+from typing import TYPE_CHECKING
+from utils import States
+
+if TYPE_CHECKING:
+    from user import User
 
 logger = settings.logging.getLogger("bot")
 
@@ -24,19 +29,51 @@ logger = settings.logging.getLogger("bot")
 #     await ctx.send(f"after {user_id}")
 
 
+class CustomContext(commands.Context):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.user = None
+
+
 def allowed_channel(ctx):
     if not settings.DISCORD_BOT_CHAT_ID:
         return True
     return ctx.channel.id == settings.DISCORD_BOT_CHAT_ID
 
 
+async def validate_user_basic_perms(ctx: commands.Context):
+    if not ctx.user.is_allowed():
+        logger.error(f"[validate_user_basic_perms] User(ID: {ctx.user.id}) doesn't have rights to use the service")
+        return False
+
+    if ctx.command.name == "stop":
+        if ctx.user.state != States.VIEWING_SUMMARY:
+            logger.warning(
+                f"[validate_user_basic_perms] User(ID: {ctx.user.id}) is not viewing a summary, cannot stop.")
+            await ctx.reply("You're not viewing a summary, nothing to stop.")
+            return False
+        return True
+
+    if ctx.user.state == States.VIEWING_SUMMARY:
+        logger.warning(
+            f"[validate_user_basic_perms] User(ID: {ctx.user.id}) is currently viewing the summary and cannot access other service unless /stop is used")
+        await ctx.reply(
+            "Please use the **/stop** command to stop viewing the summary. Otherwise, you won't be able to use other commands")
+        return False
+    return True  # meaning can use the command otherwise no.
+
+
 def run():
     intents = discord.Intents.default()
     intents.message_content = True
-    # intents.members = True
-    USM = UserManager(logger, settings.user_schema, settings.video_scheme)
 
+    USM = UserManager(logger, settings.user_schema, settings.video_scheme)
     bot = commands.Bot(command_prefix="/", intents=intents)
+
+    async def get_custom_context(message, *, cls=CustomContext):
+        return await super(commands.Bot, bot).get_context(message, cls=cls)
+
+    bot.get_context = get_custom_context
 
     @bot.event
     async def on_ready():
@@ -46,36 +83,39 @@ def run():
     @bot.event
     async def on_command_error(ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            logger.error(f"User(ID: {ctx.user.id}) when typing a command missed an argument")
+            logger.error(f"[on_command_error] User(ID: {ctx.user.id}) when typing a command missed an argument")
             await ctx.send("Missing argument")
+            return
+        logger.error(f"[on_command_error] User(ID: {ctx.user.id}): {error}")
 
     # noinspection PyAsyncCall
     @bot.event
-    async def on_message(message):
+    async def on_message(message: discord.Message):
         if message.author == bot.user:
             return  # Ignore bot's own messages
         if not allowed_channel(message):
             return
 
-        user_id = message.author.id
-        user_message = message.content
-        print(f"{user_id} {user_message} {message.channel}")
-        # Process user interaction asynchronously
+        ctx = await bot.get_context(message, cls=CustomContext)
         # asyncio.create_task(process_user_interaction(user_id, user_message, message.channel))
 
-        await bot.process_commands(message)
+        if ctx.valid:  # means it is a command
+            user = USM.get_user(message.author.id)
+            ctx.user = user
+            if not await validate_user_basic_perms(ctx):
+                return False # all logging is done in the function higher
 
-    # @bot.command()
-    # async def embed(ctx):
-    #     my_embed = CustomEmbed()
-    #     my_embed.populate_info(ctx)
-    #     await ctx.send(embed=my_embed)
-    #
-    #     # Useful ctx variables
-    #     # User's display name in the server
-    #     # ctx.author.display_name
-    #     # User's avatar URL
-    #     # ctx.author.avatar_url
+            await bot.invoke(ctx)
+            return
+
+        if USM.is_using_llm(message.author.id):
+            api_cog = bot.get_cog('API_interaction')
+            await api_cog.handle_llm_interaction(ctx)
+            return
+
+    @bot.command()
+    async def kys(ctx):
+        exit()
 
     bot.run(settings.DISCORD_API_SECRET)
 

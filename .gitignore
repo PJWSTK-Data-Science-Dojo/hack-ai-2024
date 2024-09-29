@@ -5,3 +5,4 @@ __pycache__
 TODO
 .pytest_cache
 dsc_hackai/processed_video
+*.logg
