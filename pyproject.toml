@@ -24,6 +24,7 @@ pytest = "^8.3.3"
 python-multipart = "^0.0.10"
 uvicorn = "^0.30.6"
 pytest-fastapi = "^0.1.0"
+textstat = "^0.7.4"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

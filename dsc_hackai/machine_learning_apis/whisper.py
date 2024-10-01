@@ -1,6 +1,7 @@
 import requests
 import logging
-import whisperx
+
+# import whisperx
 import os
 import torch
 
@@ -104,6 +105,7 @@ class whisperx_endpoint:
         wt = whisperx_transcriber()
         transcription_response = wt.transcibe_whisperx(audio_file)
         return transcription_response
+
 
 class whisperx_endpoint_test:
     def __init__(self):
