@@ -1,8 +1,13 @@
+import threading
 import time
+import concurrent.futures
+from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 import streamlit as st
+from components import video_player
 from components.analysis import analysis_page
+from components.query import query_page
 from components.upload import upload_video
-from utils import AppState
+from utils import AppState, api
 from utils.auth import check_auth
 from utils.youtube import download_youtube_video
 
@@ -21,19 +26,35 @@ def deep_video():
     st.header(
         f"Video and Audio Processing - {st.session_state.app_state.value.capitalize()}"
     )
-    upload_tab, analysis_tab, query_tab = st.tabs(["📁Upload", "📈Analysis", "🔍Query"])
+    
+    show_input = True
+    if "video_file" in st.session_state and st.session_state.video_file is not None:
+        show_input = False
+        srt_file = None
+        if "video_id" in st.session_state and st.session_state.video_id is not None:
+            srt_file = api.get_srt_file(st.session_state.video_id)
+        
+        video_player.video_player(st.session_state.video_file, srt_file)
+        
+        
+    tabs = ["📁Upload", "🔍Query", "📈Analysis"]
+        
+    upload_tab, query_tab, analysis_tab = st.tabs(tabs)
+    
+    with query_tab:
+        query_page()  
 
     with upload_tab:
-        upload_video()
+        upload_video(show_input)
 
     with analysis_tab:
         analysis_page()
+    
+    with upload_tab:
+        st.write("Upload")        
 
-    with query_tab:
-        st.title("Query")
-        with st.spinner("Waiting for video to process..."):
-            while st.session_state.app_state != AppState.COMPLETE:
-                time.sleep(1)
+
+
 
 
 if __name__ == "__main__":

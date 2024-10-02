@@ -7,12 +7,10 @@ BACKEND_URL = "http://localhost:8000"
 def get_user(username: str) -> bool:
     url = f"{BACKEND_URL}/api/v1/user"
     try:
-        print(username)
         response = requests.get(url, params={"username": username})
 
         if response.status_code == 200:
             data = response.json()
-            print(data)
             return data
     except Exception as e:
         print(f"Error logging in: {e}")
@@ -27,7 +25,6 @@ def register(username: str) -> bool:
 
         if response.status_code == 200:
             data = response.json()
-            print(data)
             return data
 
     except Exception as e:
@@ -47,7 +44,6 @@ def start_analysis(user_id: int, video_buffer: io.BytesIO) -> bool:
 
         if response.status_code == 200:
             data = response.json()
-            print(data)
             return data
 
     except Exception as e:
@@ -63,7 +59,6 @@ def get_analysis_stage(process_id: int) -> bool:
 
         if response.status_code == 200:
             data = response.json()
-            print(data)
             return data
     except Exception as e:
         print(f"Error getting analysis stage: {e}")
@@ -78,7 +73,6 @@ def get_srt_file(process_id: int) -> bool:
 
         if response.status_code == 200:
             data = response.json()
-            print(data)
             return data
     except Exception as e:
         print(f"Error getting srt file: {e}")

@@ -59,7 +59,7 @@ def download_video():
     st.rerun()
 
 
-def upload_video():
+def upload_video(show_input=True):
     st.title("Upload")
     current_state = st.session_state.app_state.value
 
@@ -78,7 +78,8 @@ def upload_video():
         st.session_state.app_state = AppState.UPLOAD
         current_state = AppState.UPLOAD.value
 
-    upload_input(is_disabled_upload)
+    if show_input:
+        upload_input(is_disabled_upload)
 
     if current_state == AppState.DOWNLOAD.value:
 

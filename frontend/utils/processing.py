@@ -24,7 +24,7 @@ def process_video(
         st.error("Error starting analysis.")
         return
 
-    st.session_state.process_id = process_data.get("process_id")
+    st.session_state.process_id = process_data["process_id"]
 
     while True:
         stage_data = api.get_analysis_stage(st.session_state.process_id)
@@ -32,12 +32,19 @@ def process_video(
             st.error("Error during getting analysis stage.")
             break
 
-        stage = stage_data["stage"]
-        perc = stage_data["perc"]
-        message = f"Processing video... ({stage})"
-        progress_function(message, perc)
+        video_stage: str = stage_data["video_stage"]
+        perc: str = stage_data["perc"]
 
-        if stage == "done_video_processing":
+        if video_stage == "done":
+            progress_function("Processing complete.", perc)
             break
+
+        for stage in stage_data["analysis_stages"]:
+            analysis = stage["analysis"]
+            stage = stage["stage"]
+            if stage == "done":
+                continue
+
+            progress_function(f"Processing {analysis} analysis... ({stage})", perc)
 
         time.sleep(2)

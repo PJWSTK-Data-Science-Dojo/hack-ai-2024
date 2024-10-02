@@ -19,7 +19,6 @@ def sign_form():
             return
 
         user_data = api.get_user(username)
-        print(user_data)
         if user_data:
             st.session_state.username = username
             st.session_state.user_id = user_data["user_id"]
