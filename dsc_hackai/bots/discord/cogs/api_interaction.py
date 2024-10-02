@@ -87,18 +87,22 @@ class API_interaction(commands.Cog):
         self.logging = logger
         self.USM: UserManager = USM
 
+    @commands.command()
+    async def start(self, ctx: commands.Context):
+        user_id = ctx.author.id
+
     @commands.command(brief="Shows a list of preprocessed videos", description="Shows a list of preprocessed videos")
     async def my_videos(self, ctx: commands.Context):
         user = ctx.user
         videos: List[Video] = user.videos
 
         if not videos:
-            self.logging.warning(f"[/my_videos] User(ID: {user.id}) doesn't have videos preprocessed")
-            await ctx.reply(f'No videos available for {user.id}\n Use the **/summarize** command first.')
+            self.logging.warning(f"[/my_videos] User(ID: {user.user_id}) doesn't have videos preprocessed")
+            await ctx.reply(f'No videos available for {user.user_id}\n Use the **/summarize** command first.')
             return
 
         user.state = States.WAITING_FOR_VIDEO_ID
-        self.logging.info(f"[/my_videos] Successfully generated embed for user(ID: {user.id})")
+        self.logging.info(f"[/my_videos] Successfully generated embed for user(ID: {user.user_id})")
         view = VideoPaginationView(videos, ctx)
         embed = view.create_embed()
         view.message = await ctx.send(embed=embed, view=view)
@@ -133,7 +137,7 @@ class API_interaction(commands.Cog):
         # here we should send an embed with pretty short description instead of generic ctx.send
         user.state = States.VIEWING_SUMMARY
         user.currently_viewing = video_id
-        self.USM.add_llm_user(user.id, process_id)
+        self.USM.add_llm_user(user.user_id, process_id)
         await ctx.send(
             f"You can now successfully query the llm for further questions regarding your video summarization.")
 
@@ -143,7 +147,7 @@ class API_interaction(commands.Cog):
 
         user = ctx.user
         user.state = States.IDLE
-        did_remove = self.USM.delete_llm_user(user.id)
+        did_remove = self.USM.delete_llm_user(user.user_id)
         if not did_remove:
             self.logging.error(
                 f"[/stop] User(ID: {ctx.author.id}) somehow this user wasn't removed or he wasn't there in the first place")
@@ -152,7 +156,7 @@ class API_interaction(commands.Cog):
         current_video = user.get_currently_viewing_video()
         current_title = current_video.title if current_video else "You're a cheater."
 
-        self.logging.info(f"[/stop] User(ID: {user.id}) Successfully stopped viewing the summary.")
+        self.logging.info(f"[/stop] User(ID: {user.user_id}) Successfully stopped viewing the summary.")
         await ctx.reply(f"You're no longer viewing the summary of a {current_title}")
         return True
 
@@ -293,7 +297,7 @@ class API_interaction(commands.Cog):
 
     async def handle_llm_interaction(self, ctx):
         # user = ctx.user
-        self.logging.info(f"[LLM Interaction] User(ID: {ctx.author.id}) sent a message: {ctx.message.content}")
+        self.logging.info(f"[LLM Interaction] User(ID: {ctx.author.user_id}) sent a message: {ctx.message.content}")
 
         # Perform LLM interaction and respond to user
         llm_response = f"LLM Response to: {ctx.message.content}"
@@ -304,12 +308,12 @@ class API_interaction(commands.Cog):
         user = ctx.user
         if user.state != States.VIEWING_SUMMARY:
             user.state = States.VIEWING_SUMMARY
-            self.USM.add_llm_user(user.id)
+            self.USM.add_llm_user(user.user_id)
             self.logging.info(f"[/toggle_llm] switched state to viewing summary")
             return
         else:
             user.state = States.IDLE
-            self.USM.delete_llm_user(user.id)
+            self.USM.delete_llm_user(user.user_id)
             self.logging.info(f"[/toggle+llm] switched state to idle summary")
             return
 

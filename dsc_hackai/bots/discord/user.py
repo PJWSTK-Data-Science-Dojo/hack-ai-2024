@@ -77,12 +77,12 @@ class UserManager:
                 validated_videos.append(Video(**video))
 
             user = User(
-                id=data['user_id'],
+                user_id=data['user_id'],
                 state=data['state'],
                 videos=validated_videos,
                 allowed_to_use=data.get('allowed_to_use', True)
             )
-            self.logging.info(f"[create_user_from_data] User(ID: {user.id}) was created successfully")
+            self.logging.info(f"[create_user_from_data] User(ID: {user.user_id}) was created successfully")
             return user
 
         except json.JSONDecodeError as e:
@@ -107,7 +107,7 @@ class UserManager:
             return user
 
         # If the user is both not in the db nor in the cache, we create a User with DOESNT_EXISTS state
-        user = User(id=user_id, state=States.DOESNT_EXISTS, allowed_to_use=False)
+        user = User(user_id=user_id, state=States.DOESNT_EXISTS, allowed_to_use=False)
         self.logging.warning(f"[get_user] User(ID: {user_id}) Doesn't exists. Creating an empty object")
         self.user_contexts[user_id] = user
         return user

@@ -38,25 +38,28 @@ class CustomContext(commands.Context):
 def allowed_channel(ctx):
     if not settings.DISCORD_BOT_CHAT_ID:
         return True
-    return ctx.channel.id == settings.DISCORD_BOT_CHAT_ID
+    return ctx.channel.user_id == settings.DISCORD_BOT_CHAT_ID
 
 
 async def validate_user_basic_perms(ctx: commands.Context):
+    if ctx.command.name == "start":
+        return True
+
     if not ctx.user.is_allowed():
-        logger.error(f"[validate_user_basic_perms] User(ID: {ctx.user.id}) doesn't have rights to use the service")
+        logger.error(f"[validate_user_basic_perms] User(ID: {ctx.user.user_id}) doesn't have rights to use the service")
         return False
 
     if ctx.command.name == "stop":
         if ctx.user.state != States.VIEWING_SUMMARY:
             logger.warning(
-                f"[validate_user_basic_perms] User(ID: {ctx.user.id}) is not viewing a summary, cannot stop.")
+                f"[validate_user_basic_perms] User(ID: {ctx.user.user_id}) is not viewing a summary, cannot stop.")
             await ctx.reply("You're not viewing a summary, nothing to stop.")
             return False
         return True
 
     if ctx.user.state == States.VIEWING_SUMMARY:
         logger.warning(
-            f"[validate_user_basic_perms] User(ID: {ctx.user.id}) is currently viewing the summary and cannot access other service unless /stop is used")
+            f"[validate_user_basic_perms] User(ID: {ctx.user.user_id}) is currently viewing the summary and cannot access other service unless /stop is used")
         await ctx.reply(
             "Please use the **/stop** command to stop viewing the summary. Otherwise, you won't be able to use other commands")
         return False
@@ -83,10 +86,10 @@ def run():
     @bot.event
     async def on_command_error(ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            logger.error(f"[on_command_error] User(ID: {ctx.user.id}) when typing a command missed an argument")
+            logger.error(f"[on_command_error] User(ID: {ctx.user.user_id}) when typing a command missed an argument")
             await ctx.send("Missing argument")
             return
-        logger.error(f"[on_command_error] User(ID: {ctx.user.id}): {error}")
+        logger.error(f"[on_command_error] User(ID: {ctx.user.user_id}): {error}")
 
     # noinspection PyAsyncCall
     @bot.event
@@ -103,7 +106,7 @@ def run():
             user = USM.get_user(message.author.id)
             ctx.user = user
             if not await validate_user_basic_perms(ctx):
-                return False # all logging is done in the function higher
+                return False  # all logging is done in the function higher
 
             await bot.invoke(ctx)
             return
