@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import List, Union
 import json
 from jsonschema import validate
@@ -21,6 +22,10 @@ from utils import Video, User, States
 # VIEWING_SUMMARY - We have received the data from the server for the selected video. In this state, the user can ask questions to the LLM.
 # VIEWING_SUMMARY - can only be interrupted with the stop command, i dont have ideas how to do it the other way
 
+host = os.getenv('HOST', 'localhost')  # Default to 'localhost' if not set
+port = os.getenv('PORT', '8080')
+user_url = f"http://{host}:{port}/api/v1/user"
+
 
 class UserManager:
     def __init__(self, logger: 'Logger', user_schema: dict, video_schema: dict):
@@ -29,6 +34,18 @@ class UserManager:
         self.user_schema = user_schema
         self.video_schema = video_schema
         self._using_llm = {}  # we store every user_id->process_id that currently llm
+
+    def delete_user(self, user_id: int) -> bool:
+        if user_id in self.user_contexts.keys():
+            self.user_contexts.pop(user_id)
+            return True
+        return False
+
+    def add_user(self, user_id, user: User) -> bool:
+        if user_id not in self.user_contexts.keys():
+            self.user_contexts[user_id] = user
+            return True
+        return False
 
     def is_using_llm(self, user_id: int) -> bool:
         return user_id in self._using_llm
@@ -60,7 +77,7 @@ class UserManager:
             self.logging.error(f"[validate_user_data] Schema validation error: {e}")
             return False
 
-    def create_user_from_data(self, data: Union[str, dict]) -> User | None:
+    def create_user_from_data(self, data: Union[str, dict], user_id: int) -> User | None:
         try:
             if isinstance(data, str):
                 data = json.loads(data)
@@ -77,12 +94,12 @@ class UserManager:
                 validated_videos.append(Video(**video))
 
             user = User(
-                user_id=data['user_id'],
+                id=data['user_id'],
                 state=data['state'],
                 videos=validated_videos,
                 allowed_to_use=data.get('allowed_to_use', True)
             )
-            self.logging.info(f"[create_user_from_data] User(ID: {user.user_id}) was created successfully")
+            self.logging.info(f"[create_user_from_data] User(ID: {user_id}) was created successfully")
             return user
 
         except json.JSONDecodeError as e:
@@ -107,29 +124,30 @@ class UserManager:
             return user
 
         # If the user is both not in the db nor in the cache, we create a User with DOESNT_EXISTS state
-        user = User(user_id=user_id, state=States.DOESNT_EXISTS, allowed_to_use=False)
+        user = User(id=user_id, state=States.DOESNT_EXISTS, allowed_to_use=False)
         self.logging.warning(f"[get_user] User(ID: {user_id}) Doesn't exists. Creating an empty object")
         self.user_contexts[user_id] = user
         return user
 
     def fetch_user_from_api(self, user_id: int) -> User | None:
-        # query api.
-        data = '{"user_id":' + str(
-            user_id) + ',"videos": [{"title": "Sample Video","process_id": "123","stage": "started_initialized"},{"title": "Sample Video2","process_id": "1234","stage": "started_initialized", "bullet_points": ["bullet1","bullet2","bullet3"]},{"title": "Sample Video3","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video4","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video5","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video6","process_id": "1234","stage": "started_initialized"}],"allowed_to_use": true}'
+        data_link = {"username":str(user_id)}
+        response = requests.get(user_url, params=data_link)
 
-        user = self.create_user_from_data(data)
+        if response.status_code != 200:
+            print(response.status_code)
+            print(response.json())
+            return None
+
+        data = response.json()
+
+        user = self.create_user_from_data(data, user_id)
 
         if not user:
             self.logging.error(f"[fetch_user_from_api] Failed to validate user data {user_id}")
             return None
 
         return user
-        # Simulate API call to fetch user data
-        # response = requests.get(f"{API_ENDPOINT}/user/{user_id}")
-        # if response.status_code == 200:
-        #     return response.json()
-        # else:
-        #     return None
+
 
     def validate_video_data(self, video_data: Union[dict, str]) -> bool:
         """Validate the structure of video data before adding it to the user."""

@@ -80,7 +80,7 @@ user_schema = {
                         "items": {"type": "string"}
                     }
                 },
-                "required": ["title", "process_id", "stage"]
+                "required": ["title", "process_id"]
             }
         },
         "allowed_to_use": {"type": "boolean"}
@@ -99,7 +99,7 @@ video_scheme = {
             "items": {"type": "string"}
         }
     },
-    "required": ["title", "process_id", "stage"]
+    "required": ["title", "process_id"]
 }
 
 
