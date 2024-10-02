@@ -82,6 +82,21 @@ execution:
     logfile_path: ""
     timeout_seconds: 120
     icon_url: ""
+  - name: Chat Frontend
+    type: custom
+    class: webapp
+    start_command: cd /project/frontend && streamlit run Home.py --server.port 8080
+    stop_command: ps aux | grep streamlit | grep -v grep | awk '{print $2}' | xargs kill
+    user_msg: ""
+    logfile_path: ""
+    timeout_seconds: 60
+    icon_url: ""
+    webapp_options:
+      autolaunch: true
+      port: "8080"
+      proxy:
+        trim_prefix: false
+      url: http://localhost:8080/
   - name: WhisperX
     type: custom
     class: process
