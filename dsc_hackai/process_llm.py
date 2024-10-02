@@ -1,19 +1,20 @@
-import ollama
 import json
 from json import JSONDecodeError
 from typing import Dict
 from pydantic import BaseModel, validator, ValidationError
 from typing import Optional
 
+import ollama
+
 ollama_client = ollama.Client(host="192.168.1.42:11435")
 
 
 # Video
 class VideoVSFilters(BaseModel):
-    start_ts: Optional[int] = None
-    end_ts: Optional[int] = None
+    start: Optional[int] = None
+    end: Optional[int] = None
 
-    @validator("start_ts", "end_ts", pre=True)
+    @validator("start", "end", pre=True)
     def validate_ts(cls, value):
         if value is not None:
             return int(value)
@@ -65,10 +66,10 @@ def get_relevant_data_video(vs, query):
 # Audio
 class AudioVSFilters(BaseModel):
     speaker_id: Optional[str] = None
-    start_ts: Optional[float] = None
-    end_ts: Optional[float] = None
+    start: Optional[float] = None
+    end: Optional[float] = None
 
-    @validator("start_ts", "end_ts", pre=True)
+    @validator("start", "end", pre=True)
     def validate_ts(cls, value):
         if value is not None:
             return float(value)
@@ -117,7 +118,7 @@ def get_relevant_data_audio(vs, query):
     return audio_vs_q_res
 
 
-def query_llm(vs_audio, vs_video, video_length, user_query):
+def query_vs_llm(vs_audio, vs_video, video_length, user_query):
     all_data = ""
 
     # Generate audio data queries with filters

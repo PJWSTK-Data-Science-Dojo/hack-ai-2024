@@ -61,4 +61,5 @@ cover/
 
 # Workbench Project Layout
 data/scratch/*
+dsc_hackai/project
 !data/scratch/.gitkeep

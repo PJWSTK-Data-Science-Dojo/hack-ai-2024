@@ -1,9 +1,11 @@
 from typing import List
 from transformers import AutoModel, AutoTokenizer
+import base64
+from io import BytesIO
+from PIL import Image
+
 import torch
 import ollama
-import base64
-from PIL import Image
 
 
 def convert_to_base64(pil_image):
@@ -18,28 +20,33 @@ def convert_to_base64(pil_image):
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
     return img_str
 
+
 class llm_endpoint:
     def __init__(self):
         pass
-    
+
     def run_minicpmv_generate(self, question: str, image_path: str):
         num_device = 0
 
         context_length = 2048  # Adjust this value based on MiniCPM-V's requirements
         model_name = "openbmb/MiniCPM-V-2_6"
-        model = AutoModel.from_pretrained('openbmb/MiniCPM-V', trust_remote_code=True, torch_dtype=torch.bfloat16)
+        model = AutoModel.from_pretrained(
+            "openbmb/MiniCPM-V", trust_remote_code=True, torch_dtype=torch.bfloat16
+        )
         # For Nvidia GPUs support BF16 (like A100, H100, RTX3090)
-        model = model.to(device='cuda', dtype=torch.bfloat16)
+        model = model.to(device="cuda", dtype=torch.bfloat16)
         # For Nvidia GPUs do NOT support BF16 (like V100, T4, RTX2080)
-        #model = model.to(device='cuda', dtype=torch.float16)
+        # model = model.to(device='cuda', dtype=torch.float16)
         # For Mac with MPS (Apple silicon or AMD GPUs).
         # Run with `PYTORCH_ENABLE_MPS_FALLBACK=1 python test.py`
-        #model = model.to(device='mps', dtype=torch.float16)
+        # model = model.to(device='mps', dtype=torch.float16)
 
-        tokenizer = AutoTokenizer.from_pretrained('openbmb/MiniCPM-V', trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            "openbmb/MiniCPM-V", trust_remote_code=True
+        )
         model.eval()
-        image = Image.open(image_path).convert('RGB')
-        msgs = [{'role': 'user', 'content': question}]
+        image = Image.open(image_path).convert("RGB")
+        msgs = [{"role": "user", "content": question}]
 
         res, context, _ = model.chat(
             image=image,
@@ -47,16 +54,17 @@ class llm_endpoint:
             context=None,
             tokenizer=tokenizer,
             sampling=True,
-            temperature=0.7
+            temperature=0.7,
         )
         result = res
         return result
 
     def inference_text(self):
         pass
-    
+
     def inference_image(self, image_path: str, question: str):
         return self.run_minicpmv_generate(question)
+
 
 class llm_endpoint_test:
     def __init__(self):
