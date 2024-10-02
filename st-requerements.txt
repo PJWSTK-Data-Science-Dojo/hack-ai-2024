@@ -1,5 +1,0 @@
-streamlit
-moviepy
-pysrt
-pytubefix
-Jinja2
