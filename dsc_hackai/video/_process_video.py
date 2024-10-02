@@ -3,9 +3,7 @@ import tempfile
 import requests
 import pathlib
 import subprocess
-import ollama
 import logging
-import base64
 from io import BytesIO
 from PIL import Image
 
@@ -13,6 +11,10 @@ import faiss
 from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_community.vectorstores import FAISS, VectorStore
+
+from machine_learning_apis.llm import llm_endpoint_test
+
+llm_end = llm_endpoint_test()
 
 VIDEO_QUESTIONS = [
     {"name": "object_detection", "q": "What objects can you spot"},
@@ -22,38 +24,10 @@ VIDEO_QUESTIONS = [
     },
     {"name": "emotion_recognition", "q": "What emotions are shown"},
     {"name": "motion_detection", "q": "How are objects moving"},
-    # {"name": "camera_motion", "q": "how is the camera moving"},
-    # {"name": "view_changes", "q": "were there multiple changes in view"},
-    # {"name": "frame_description", "q": "what is in the frame"},
 ]
 
 model_name = "intfloat/multilingual-e5-small"
 embeddings = HuggingFaceBgeEmbeddings(model_name=model_name)
-
-
-def convert_to_base64(pil_image):
-    """
-    Convert PIL images to Base64 encoded strings
-
-    :param pil_image: PIL image
-    :return: Base64 string
-    """
-    buffered = BytesIO()
-    pil_image.save(buffered, format="JPEG")  # You can change the format if needed
-    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    return img_str
-
-
-def describe_frame_ollama(image_path: str, question: str):
-    ollama_client = ollama.Client(host="192.168.1.42:11435")
-    res = ollama_client.generate(
-        model="minicpm-v:8b",
-        options={"temperature": 0.07},
-        images=[convert_to_base64(Image.open(image_path))],
-        prompt=question
-        + ". Respond with up to 3 senteces, do not make any additional remarks.",
-    )["response"]
-    return res
 
 
 def split_video_to_frames(video_file_path, tmpdir):
@@ -105,13 +79,13 @@ def process_halves(arr, start=0, end=None, depth=0):
     return res
 
 
-class VisionProcessing:
+class VideoProcessing:
     def __init__(self):
         self.video_vector_store = None
         self.video_processing_results = []
         self.video_processing_all_frames_count = 0
 
-    def add_to_vector_store(self, doc: Document, worspace_dir=None) -> VectorStore:
+    def add_to_vector_store(self, doc: Document, workspace_dir=None) -> VectorStore:
         """Generates a vector store from a list of segments."""
         logging.debug("Adding to vector store")
 
@@ -121,41 +95,52 @@ class VisionProcessing:
         else:
             self.video_vector_store.add_documents([doc])
         logging.debug("Video vector store updated!")
-        # logging.info(f"Current videos dict {self.video_vector_store.docstore._dict}")
+        self.video_vector_store.save_local(workspace_dir, "video_vector_store")
 
-    def process_vision(self, video_file_path, workdir):
+    def process_video(self, video_file_path, workdir):
+        """
+        Processes a video file into frames and then runs the vector processing pipeline on each frame.
+        - Split video to frames - each frame is second
+        - Sort those frames so it will process it in halves
+        - Send video to multimodal LLM processing video and text - after each frame vector store is updated (allows to query with LLM instantly!)
+        """
         start_time = time.time()
         tmpdir_vids = pathlib.Path(workdir, "video_frame")
         tmpdir_vids.mkdir(exist_ok=True)
 
+        # Split video into frames
         logging.info(f"Chunking video to frames")
         split_video_to_frames(video_file_path, tmpdir_vids)
         logging.info(f"Video chunked to frames")
 
+        # Sort frames
         video_frames = sorted([str(f) for f in pathlib.Path(tmpdir_vids).glob("*.jpg")])
         video_frames = process_halves(video_frames)
         self.video_processing_all_frames_count = len(video_frames)
-        # Process each video chunk
+
+        # Process each video frame
         logging.info(f"Processing video frames")
         for idx, video_frame_file_path in enumerate(video_frames):
 
             frame_ts = int(str(pathlib.Path(video_frame_file_path).stem).split("_")[1])
             logging.info(
-                f"Processing frame {idx} | {len(video_frames)} (ts: {frame_ts})"
+                f"Processing frame {idx} | {len(video_frames)} (timestamp: {frame_ts})"
             )
             res = {}
             for q in VIDEO_QUESTIONS:
                 try:
-                    res[q["name"]] = describe_frame_ollama(
+                    res[q["name"]] = llm_end.inference_image(
                         video_frame_file_path, q["q"]
                     )
                 except Exception as e:
-                    logging.error("Error processing frame", video_frame_file_path)
+                    logging.error(
+                        "Error processing frame " + str(video_frame_file_path) + str(e)
+                    )
             frame_document = Document(
                 page_content=". ".join(res[key] for key in res.keys()),
-                metadata={"start_ts": frame_ts - 1, "end_ts": frame_ts},
+                metadata={"start": frame_ts - 1, "end": frame_ts},
             )
-            self.add_to_vector_store(frame_document, worspace_dir=workdir)
+            self.add_to_vector_store(frame_document, workspace_dir=workdir)
             self.video_processing_results.append(res)
         end_time = time.time()
         delta_time = end_time - start_time

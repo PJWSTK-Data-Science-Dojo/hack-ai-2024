@@ -1,5 +1,5 @@
 specVersion: v2
-specMinorVersion: 1
+specMinorVersion: 2
 meta:
   name: deep-video
   image: project-deep-video
@@ -33,6 +33,7 @@ environment:
     labels:
     - cuda11.8
     - pytorch2.3
+    apps: []
     programming_languages:
     - python3
     icon_url: ""
@@ -61,11 +62,26 @@ environment:
       name: ""
       target: ""
 execution:
-  apps: []
+  apps:
+  - name: Visual Studio Code
+    type: vs-code
+    class: native
+    start_command: ""
+    health_check_command: '[ \$(ps aux | grep ".vscode-server" | grep -v grep | wc
+      -l ) -gt 4 ] && [ \$(ps aux | grep "/.vscode-server/bin/.*/node .* net.createConnection"
+      | grep -v grep | wc -l) -gt 0 ]'
+    stop_command: ""
+    user_msg: ""
+    logfile_path: ""
+    timeout_seconds: 120
+    icon_url: ""
   resources:
     gpu:
       requested: 1
     sharedMemoryMB: 4096
+  secrets:
+  - variable: HF_TOKEN
+    description: Huggingface token
   mounts:
   - type: project
     target: /project/

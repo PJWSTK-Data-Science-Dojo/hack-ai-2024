@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Video Player</title>
+    <style lang="css">
+        #timestamps {
+            color: white;
+            display: grid;
+            grid-template-rows: 20px auto;
+            row-gap: 10px;
+        }
+        #timestamps h3 {
+            width: 100%;
+            grid-row: 1;
+            margin: 0;   
+        }
+        #timestamps button {
+            width: 100%;
+            color: black;   
+        }
+        #timestamp-list {
+            grid-row: 2;
+            display: grid;
+            grid-template-rows: repeat(auto-fill, 30px);
+            column-gap: 10px;
+            row-gap: 10px;
+        }
+        #myVideo {
+            width: 100%;
+        }
+        #video-player {
+            display: grid;
+            width: 100%;
+            grid-template-columns: auto 100px;
+            column-gap: 10px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="video-player">
+        <video id="myVideo" controls>
+            <source src="{{ video_url }}" type="video/mp4">
+            <track src="{{ subtitle_url }}" kind="subtitles" srclang="en" label="English">
+            Your browser does not support the video tag.
+        </video>
+        {% if timestamps %}
+            <div id="timestamps">
+                <h3>Timestamps:</h3>
+                <div id="timestamp-list">
+                    {% for timestamp, label in timestamps %}
+                        <button onclick="jumpTo({{ timestamp }})">
+                            {{ timestamp }} {{ label }}
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    <script>
+        function jumpTo(seconds) {
+            var video = document.getElementById('myVideo');
+            video.currentTime = seconds;
+            video.play();
+        }
+    </script>
+</body>
+</html>
