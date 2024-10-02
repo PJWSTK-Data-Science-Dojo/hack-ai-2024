@@ -1,7 +1,9 @@
 import time
 import streamlit as st
+from components.analysis import analysis_page
 from components.upload import upload_video
 from utils import AppState
+from utils.auth import check_auth
 from utils.youtube import download_youtube_video
 
 
@@ -11,6 +13,9 @@ if st.session_state.get("app_state") is None:
 
 def deep_video():
     st.set_page_config(layout="wide")
+
+    if not check_auth():
+        st.stop()
 
     st.title("DeepVideo")
     st.header(
@@ -22,10 +27,7 @@ def deep_video():
         upload_video()
 
     with analysis_tab:
-        st.title("Analysis")
-        with st.spinner("Waiting for video to process..."):
-            while st.session_state.app_state != AppState.COMPLETE:
-                time.sleep(1)
+        analysis_page()
 
     with query_tab:
         st.title("Query")

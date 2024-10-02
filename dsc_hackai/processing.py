@@ -35,13 +35,14 @@ class Processing:
                 "stages": video.stage,
             }
 
-    def update_db_stage(self, stage: str):
+    def update_db_stage(self, stage: str, perc: float = 0.0):
         sess = next(self.db_session())
         # Query the video with the given process_id
         video = sess.query(Video).filter_by(process_id=self.process_id).first()
         if video is not None:
             # Update the stage of the video
             video.stage = stage
+            video.perc = perc
             sess.commit()
 
     def get_processing_audio(self):
@@ -79,19 +80,19 @@ class Processing:
 
     def process_audio_visual(self):
         # Processing audio
-        self.update_db_stage("started_audio_processing")
+        self.update_db_stage("started_audio_processing", 0.25)
         logging.info(f"started_audio_processing - {self.process_id}")
 
         self.audio_processing.process_audio(self.video_path)
 
-        self.update_db_stage("done_audio_processing")
+        self.update_db_stage("done_audio_processing", 0.5)
         logging.info(f"done_audio_processing - {self.process_id}")
 
         # Processing video
-        self.update_db_stage("started_video_processing")
+        self.update_db_stage("started_video_processing", 0.75)
         logging.info(f"started_video_processing - {self.process_id}")
 
         self.vision_processing.process_video(self.video_path, self.process_workdir)
 
-        self.update_db_stage("done_video_processing")
+        self.update_db_stage("done_video_processing", 1.0)
         logging.info(f"done_video_processing - {self.process_id}")

@@ -134,7 +134,7 @@ class VideoProcessing:
                     )
                 except Exception as e:
                     logging.error(
-                        "Error processing frame" + str(video_frame_file_path) + str(e)
+                        "Error processing frame " + str(video_frame_file_path) + str(e)
                     )
             frame_document = Document(
                 page_content=". ".join(res[key] for key in res.keys()),

@@ -1,5 +1,13 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    Boolean,
+    ForeignKey,
+    Float,
+)
 from sqlalchemy.orm import sessionmaker, relationship
 
 DATABASE_URL = "sqlite:///./app.db"
@@ -16,6 +24,7 @@ class Video(Base):
     process_id = Column(String, index=True)
     stage = Column(String, default="uploaded")
     user_id = Column(Integer, ForeignKey("users.id"))
+    perc = Column(Float, default=0.0)
 
     user = relationship("User", back_populates="videos")
 

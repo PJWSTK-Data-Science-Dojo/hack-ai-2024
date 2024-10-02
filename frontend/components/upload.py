@@ -1,7 +1,7 @@
 import streamlit as st
 
 from utils import AppState, remove_ansi_codes, save_buffer_to_file
-from utils.mockups import process_video
+from utils.processing import process_video
 from utils.youtube import download_youtube_video
 
 
@@ -90,10 +90,14 @@ def upload_video():
     if current_state == AppState.PROCESSING.value:
         progress_bar = st.progress(0)
 
-        def progress_update(percent, message=None):
+        def progress_function(message, percent):
             progress_bar.progress(percent, text=message)
 
-        process_video(st.session_state.video_file, progress_update)
+        process_video(
+            st.session_state.user_id,
+            st.session_state.video_file,
+            progress_function=progress_function,
+        )
 
         st.session_state.app_state = AppState.COMPLETE
         st.rerun()
