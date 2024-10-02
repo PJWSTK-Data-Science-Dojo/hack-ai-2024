@@ -6,9 +6,7 @@ from utils.youtube import download_youtube_video
 
 
 def upload_input(disabled=False):
-    youtube_url = st.text_input(
-        "Enter a YouTube video URL", key="youtube_url", disabled=disabled
-    )
+    youtube_url = st.text_input("Enter a YouTube video URL", disabled=disabled)
 
     uploaded_video = st.file_uploader(
         "Or choose a video...", type=["mp4", "avi", "mov"], disabled=disabled
@@ -28,6 +26,8 @@ def upload_input(disabled=False):
     elif youtube_url:
         if st.session_state.app_state.value != AppState.UPLOAD.value:
             return
+
+        st.session_state.youtube_url = youtube_url
         st.session_state.app_state = AppState.DOWNLOAD
         st.rerun()
 
@@ -35,22 +35,20 @@ def upload_input(disabled=False):
 def download_video():
     progress_bar = st.progress(0)
 
-    def progress_function(stream, chunk, bytes_remaining):
-        total_size = stream.filesize
-        bytes_downloaded = total_size - bytes_remaining
-        progress = bytes_downloaded / total_size
-        progress_bar.progress(progress, text=f"Downloading: {int(progress * 100)}%")
+    def progress_function(perc, message):
+        progress_bar.progress(perc, text=message)
 
     st.spinner("Downloading video...")
     try:
         video_buffer, video_title = download_youtube_video(
-            st.session_state.youtube_url, progress_function
+            st.session_state.user_id, st.session_state.youtube_url, progress_function
         )
     except Exception as e:
-        st.session_state.youtube_url = ""
-        st.session_state.app_state = AppState.DOWNLOAD_ERROR
         st.session_state.error_message = remove_ansi_codes(str(e)).strip()
         print("Error downloading video:", st.session_state.error_message)
+
+        st.session_state.youtube_url = ""
+        st.session_state.app_state = AppState.DOWNLOAD_ERROR
         st.rerun()
         return
 

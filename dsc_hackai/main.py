@@ -1,23 +1,23 @@
 import os
-import shutil
-from datetime import datetime
 import logging
 import pathlib
-from pydantic import BaseModel
-from typing import List
-from uuid import uuid4
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.responses import FileResponse
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from sqlalchemy.ext.declarative import declarative_base
 
-from database import Video, User, Base, SessionLocal
+from database import Video, User, SessionLocal
 from processing import Processing
 from process_llm import query_vs_llm
+from schemas import (
+    AnalysisResponse,
+    QueryBody,
+    UserCreate,
+    UserLoginResponse,
+    UserResponse,
+)
 
 
 app = FastAPI()
@@ -39,27 +39,6 @@ workspace_dir = pathlib.Path("./project/data")
 workspace_dir.mkdir(parents=True, exist_ok=True)
 
 
-class UserBase(BaseModel):
-    username: str
-
-
-class UserCreate(UserBase):
-    pass
-
-
-class UserResponse(BaseModel):
-    user_id: int
-    allowed_to_use: bool
-
-
-class UserLoginResponse(UserResponse):
-    videos: List[dict] = []
-
-
-class AnalysisResponse(BaseModel):
-    process_id: str
-
-
 @app.post("/api/v1/start_analysis", response_model=AnalysisResponse, tags=["Analysis"])
 async def upload_video_for_analysis(user_id: int, video_file: UploadFile = File(...)):
     # Create a processing object
@@ -72,17 +51,6 @@ async def upload_video_for_analysis(user_id: int, video_file: UploadFile = File(
         raise HTTPException(status_code=503, detail=e)
 
     return {"process_id": process_id}
-
-
-class AnalysisStage(BaseModel):
-    stage: str
-    time: datetime
-
-
-class AnalysisStageResponse(BaseModel):
-    frames_processed: int
-    frames_all: int
-    stages: List[AnalysisStage]
 
 
 @app.get("/api/v1/analysis/stage/{process_id}", tags=["Response Data"])
@@ -110,7 +78,7 @@ async def get_srt_file(process_id: str):
 
 
 @app.get("/api/v1/analysis/data/audio", tags=["Response Data"])
-async def get_audio_data_for_process(process_id: str):
+async def get_audio_data_for_process(process_id: str, db: Session = Depends(get_db)):
     job = db.query(Video).filter(Video.process_id == process_id).first()
     if job is None:
         raise HTTPException(status_code=404, detail="Process not found.")
@@ -118,7 +86,7 @@ async def get_audio_data_for_process(process_id: str):
 
 
 @app.get("/api/v1/analysis/data/video", tags=["Response Data"])
-async def get_video_data_for_process(process_id: str):
+async def get_video_data_for_process(process_id: str, db: Session = Depends(get_db)):
     job = db.query(Video).filter(Video.process_id == process_id).first()
     if job is None:
         raise HTTPException(status_code=404, detail="Process not found.")
@@ -126,19 +94,18 @@ async def get_video_data_for_process(process_id: str):
 
 
 @app.post("/api/v1/analysis/ask/{process_id}", tags=["Response Data"])
-async def ask_about_video(process_id: str, request: Request):
-    for process_id_dir in pathlib.Path(workspace_dir, process_id):
-        if str(process_id_dir) == process_id:
-            query = await request.json()
-            # Process the query and generate a response
-            response = query_vs_llm(
-                pathlib.Path(workspace_dir, process_id, "audio_vector_store"),
-                pathlib.Path(workspace_dir, process_id, "video_vector_store"),
-                600,
-                query["user_query"],
-            )
-            return {"response": response}
-    raise HTTPException(status_code=404, detail="Process not found.")
+async def ask_about_video(process_id: str, query: QueryBody):
+    process_dir = pathlib.Path(workspace_dir) / process_id
+
+    if not process_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Process not found.")
+
+    response = query_vs_llm(
+        process_dir / "audio_vector_store",
+        process_dir / "video_vector_store",
+        query.user_query,
+    )
+    return {"response": response}
 
 
 @app.post("/api/v1/register", response_model=UserResponse, tags=["Account"])
@@ -158,20 +125,32 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/user", tags=["Account"])
-async def get_user_data(username: str, user_id: int, db: Session = Depends(get_db)):
+async def get_user_data(
+    username: str | None = None,
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+):
     if not username and not user_id:
         raise HTTPException(status_code=401)
+
+    existing_user: User = None
     if username:
         existing_user = db.query(User).filter(User.username == username).first()
         if not existing_user:
             raise HTTPException(status_code=404, detail="User not found")
-    # if user_id:
-    #     existing_user = db.query(User).filter(User.id == user_id).first()
-    #     if not existing_user:
-    #         raise HTTPException(status_code=404, detail="User not found")
+
+    if user_id:
+        existing_user = db.query(User).filter(User.id == user_id).first()
+        if not existing_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="User not found")
 
     videos_data = []
     for video in existing_user.videos:
+        video: Video
+
         video_info = {
             "title": video.title,
             "process_id": video.process_id,
