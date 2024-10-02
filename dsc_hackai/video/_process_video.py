@@ -12,9 +12,9 @@ from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_community.vectorstores import FAISS, VectorStore
 
-from machine_learning_apis.llm import llm_endpoint_test
+from machine_learning_apis.llm import llm_endpoint, llm_endpoint_test
 
-llm_end = llm_endpoint_test()
+llm_end = llm_endpoint()
 
 VIDEO_QUESTIONS = [
     {"name": "object_detection", "q": "What objects can you spot"},

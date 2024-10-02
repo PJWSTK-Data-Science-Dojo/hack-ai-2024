@@ -94,5 +94,5 @@ class Processing:
 
         self.vision_processing.process_video(self.video_path, self.process_workdir)
 
-        self.update_db_stage("done_video_processing", 1.0)
-        logging.info(f"done_video_processing - {self.process_id}")
+        self.update_db_stage("done", 1.0)
+        logging.info(f"done - {self.process_id}")

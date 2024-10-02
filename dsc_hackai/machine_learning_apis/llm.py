@@ -1,5 +1,6 @@
 from typing import List
 from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig
 import base64
 from io import BytesIO
 from PIL import Image
@@ -25,45 +26,52 @@ class llm_endpoint:
     def __init__(self):
         pass
 
-    def run_minicpmv_generate(self, question: str, image_path: str):
-        num_device = 0
-
-        context_length = 2048  # Adjust this value based on MiniCPM-V's requirements
-        model_name = "openbmb/MiniCPM-V-2_6"
-        model = AutoModel.from_pretrained(
-            "openbmb/MiniCPM-V", trust_remote_code=True, torch_dtype=torch.bfloat16
+    def run_inference(self, image_path: str, question: str):
+        # load the processor
+        processor = AutoProcessor.from_pretrained(
+            "allenai/Molmo-7B-D-0924",
+            trust_remote_code=True,
+            torch_dtype="auto",
+            device_map="auto",
         )
-        # For Nvidia GPUs support BF16 (like A100, H100, RTX3090)
-        model = model.to(device="cuda", dtype=torch.bfloat16)
-        # For Nvidia GPUs do NOT support BF16 (like V100, T4, RTX2080)
-        # model = model.to(device='cuda', dtype=torch.float16)
-        # For Mac with MPS (Apple silicon or AMD GPUs).
-        # Run with `PYTORCH_ENABLE_MPS_FALLBACK=1 python test.py`
-        # model = model.to(device='mps', dtype=torch.float16)
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            "openbmb/MiniCPM-V", trust_remote_code=True
+        # load the model
+        model = AutoModelForCausalLM.from_pretrained(
+            "allenai/Molmo-7B-D-0924",
+            trust_remote_code=True,
+            torch_dtype="auto",
+            device_map="auto",
         )
-        model.eval()
-        image = Image.open(image_path).convert("RGB")
-        msgs = [{"role": "user", "content": question}]
 
-        res, context, _ = model.chat(
-            image=image,
-            msgs=msgs,
-            context=None,
-            tokenizer=tokenizer,
-            sampling=True,
-            temperature=0.7,
+        model.save_pretrained("molmo_model")
+
+        # process the image and text
+        inputs = processor.process(
+            images=[Image.open(image_path)],
+            text=question,
         )
-        result = res
-        return result
+
+        # move inputs to the correct device and make a batch of size 1
+        inputs = {k: v.to(model.device).unsqueeze(0) for k, v in inputs.items()}
+
+        # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
+        output = model.generate_from_batch(
+            inputs,
+            GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
+            tokenizer=processor.tokenizer,
+        )
+
+        # only get generated tokens; decode them to text
+        generated_tokens = output[0, inputs["input_ids"].size(1) :]
+        generated_text = processor.tokenizer.decode(
+            generated_tokens, skip_special_tokens=True
+        )
 
     def inference_text(self):
         pass
 
     def inference_image(self, image_path: str, question: str):
-        return self.run_minicpmv_generate(question)
+        return self.run_inference(image_path, question)
 
 
 class llm_endpoint_test:

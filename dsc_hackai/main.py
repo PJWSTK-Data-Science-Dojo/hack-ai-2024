@@ -158,10 +158,17 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/user", tags=["Account"])
-async def get_user_data(username: str, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.username == username).first()
-    if not existing_user:
-        raise HTTPException(status_code=404, detail="User not found")
+async def get_user_data(username: str, user_id: int, db: Session = Depends(get_db)):
+    if not username and not user_id:
+        raise HTTPException(status_code=401)
+    if username:
+        existing_user = db.query(User).filter(User.username == username).first()
+        if not existing_user:
+            raise HTTPException(status_code=404, detail="User not found")
+    if user_id:
+        existing_user = db.query(User).filter(User.id == user_id).first()
+        if not existing_user:
+            raise HTTPException(status_code=404, detail="User not found")
 
     videos_data = []
     for video in existing_user.videos:

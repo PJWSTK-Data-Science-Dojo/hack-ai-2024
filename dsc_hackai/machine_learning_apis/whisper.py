@@ -18,7 +18,7 @@ class whisperx_transcriber:
             "small",
             self.device,
             compute_type=self.compute_type,
-            download_root="/project/models/",
+            download_root="project/models/",
         )
         logging.info("Loaded WhisperX model")
 
