@@ -1,4 +1,12 @@
 # apt packages to install should be listed one per line
-git
-git-lfs
 ffmpeg
+ca-certificates
+curl
+jq
+less
+make
+pandoc
+python3.10-venv
+skopeo
+unzip
+wget
