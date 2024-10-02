@@ -1,5 +1,20 @@
+import enum
 import io
 from pathlib import Path
+import re
+
+
+class AppState(enum.Enum):
+    UPLOAD = "UPLOAD"
+    DOWNLOAD = "DOWNLOAD"
+    DOWNLOAD_ERROR = "DOWNLOAD_ERROR"
+    PROCESSING = "PROCESSING"
+    COMPLETE = "COMPLETE"
+
+
+def remove_ansi_codes(text):
+    ansi_escape = re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
+    return ansi_escape.sub("", text)
 
 
 def save_buffer_to_file(buffer: io.BytesIO, file_name: str):

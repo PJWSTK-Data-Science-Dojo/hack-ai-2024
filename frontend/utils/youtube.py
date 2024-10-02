@@ -4,7 +4,7 @@ import io
 from . import save_buffer_to_file
 
 
-def download_youtube_video(youtube_url, progress_function: Callable):
+def download_youtube_video(youtube_url, progress_function: Callable | None = None):
     """
     Simulates processing a YouTube URL.
 
@@ -18,7 +18,8 @@ def download_youtube_video(youtube_url, progress_function: Callable):
 
         buffer = io.BytesIO()
 
-        yt.register_on_progress_callback(progress_function)
+        if progress_function is not None:
+            yt.register_on_progress_callback(progress_function)
 
         video_stream.stream_to_buffer(buffer)
         buffer.seek(0)
@@ -27,4 +28,4 @@ def download_youtube_video(youtube_url, progress_function: Callable):
         return buffer, yt.title
     except Exception as e:
         print(f"Error downloading video: {e}")
-        return None, None
+        raise e

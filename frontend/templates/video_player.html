@@ -53,7 +53,7 @@
                 <div id="timestamp-list">
                     {% for timestamp, label in timestamps %}
                         <button onclick="jumpTo({{ timestamp }})">
-                            {{ timestamp }}
+                            {{ timestamp }} {{ label}}
                         </button>
                     {% endfor %}
                 </div>
