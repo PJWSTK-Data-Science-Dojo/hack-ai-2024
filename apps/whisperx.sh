@@ -25,8 +25,6 @@ TAG=$(config_lkp "WHISPERX_VERSION" "latest")
 _docker_run() {
 	docker run \
 		--name $NAME \
-        --gpus "$GPUS" \
-		--security-opt seccomp:unconfined \
 		--health-cmd="curl -f http://localhost:8081/health" \
 		--health-interval=30s \
 		--health-start-period=90s \
