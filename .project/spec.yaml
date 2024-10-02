@@ -86,6 +86,7 @@ execution:
     type: custom
     class: webapp
     start_command: cd /project/frontend && streamlit run Home.py --server.port 8080
+    health_check_command: exit 0
     stop_command: ps aux | grep streamlit | grep -v grep | awk '{print $2}' | xargs kill
     user_msg: ""
     logfile_path: ""
