@@ -75,6 +75,16 @@ execution:
     logfile_path: ""
     timeout_seconds: 120
     icon_url: ""
+  - name: WhisperX
+    type: custom
+    class: process
+    start_command: /project/apps/whisperx.sh start
+    health_check_command: /project/apps/whisperx.sh status
+    stop_command: /project/apps/whisperx.sh stop
+    user_msg: ""
+    logfile_path: ""
+    timeout_seconds: 60
+    icon_url: milvus.io/favicon-32x32.png
   resources:
     gpu:
       requested: 1
