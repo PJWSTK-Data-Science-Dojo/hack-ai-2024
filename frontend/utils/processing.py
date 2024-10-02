@@ -20,7 +20,11 @@ def process_video(
     :return: A mock result that mimics the backend response.
     """
     process_data = api.start_analysis(user_id, video_buffer)
-    st.session_state.process_id = process_data["process_id"]
+    if process_data is None:
+        st.error("Error starting analysis.")
+        return
+
+    st.session_state.process_id = process_data.get("process_id")
 
     while True:
         stage_data = api.get_analysis_stage(st.session_state.process_id)

@@ -110,7 +110,7 @@ async def get_srt_file(process_id: str):
 
 
 @app.get("/api/v1/analysis/data/audio", tags=["Response Data"])
-async def get_audio_data_for_process(process_id: str):
+async def get_audio_data_for_process(process_id: str, db: Session = Depends(get_db)):
     job = db.query(Video).filter(Video.process_id == process_id).first()
     if job is None:
         raise HTTPException(status_code=404, detail="Process not found.")
@@ -118,7 +118,7 @@ async def get_audio_data_for_process(process_id: str):
 
 
 @app.get("/api/v1/analysis/data/video", tags=["Response Data"])
-async def get_video_data_for_process(process_id: str):
+async def get_video_data_for_process(process_id: str, db: Session = Depends(get_db)):
     job = db.query(Video).filter(Video.process_id == process_id).first()
     if job is None:
         raise HTTPException(status_code=404, detail="Process not found.")
