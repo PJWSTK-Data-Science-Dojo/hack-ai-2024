@@ -82,13 +82,14 @@ execution:
     logfile_path: ""
     timeout_seconds: 120
     icon_url: ""
-  - name: Chat Frontend
+  - name: API
     type: custom
-    class: webapp
-    start_command: python -m streamlit run frontend/Home.py --server.port 8080
+    class: process
+    start_command: export PROXY_PREFIX && cd /project/dsc_hackai && uvicorn --log-level
+      info main:app --port 8080 --host 0.0.0.0
+      --timeout-graceful-shutdown 10
     health_check_command: exit 0
-    stop_command: ps aux | grep streamlit | grep -v grep | awk '{print $2}' | xargs
-      kill
+    stop_command: ps aux | grep main:app | grep -v grep | awk '{print $2}' | xargs kill
     user_msg: ""
     logfile_path: ""
     timeout_seconds: 60
@@ -99,6 +100,22 @@ execution:
       proxy:
         trim_prefix: false
       url: http://localhost:8080/
+  - name: Chat Frontend
+    type: custom
+    class: webapp
+    start_command: python -m streamlit run frontend/Home.py --server.port 8501
+    health_check_command: exit 0
+    stop_command: ps aux | grep streamlit | grep -v grep | awk '{print $2}' | xargs kill
+    user_msg: ""
+    logfile_path: ""
+    timeout_seconds: 60
+    icon_url: ""
+    webapp_options:
+      autolaunch: true
+      port: "8501"
+      proxy:
+        trim_prefix: false
+      url: http://localhost:8501/
   - name: WhisperX
     type: custom
     class: process
