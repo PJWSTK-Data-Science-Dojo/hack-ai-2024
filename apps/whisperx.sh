@@ -23,7 +23,6 @@ TAG=$(config_lkp "WHISPERX_VERSION" "latest")
 # This function is responsible for running creating a running the container
 # and its dependencies.
 _docker_run() {
-	docker volume create $NAME > /dev/null
 	docker run \
 		--name $NAME \
         --gpus "$GPUS" \
@@ -33,8 +32,7 @@ _docker_run() {
 		--health-start-period=90s \
 		--health-timeout=20s \
 		--health-retries=3 \
-        $DOCKER_NETWORK $IMAGE:$TAG \
-		milvus run standalone > /dev/null
+        $DOCKER_NETWORK $IMAGE:$TAG
 }
 
 # stop and remove the running container
