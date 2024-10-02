@@ -91,16 +91,17 @@ class UserManager:
         except (TypeError, ValueError) as e:
             self.logging.error(f"[create_user_from_data] Error creating User from data: {e}")
             return None
+        except Exception as e:
+            self.logging.error(f"[create_user_from_data] Unknown Error: {e}")
 
     def get_user(self, user_id: int) -> User:
         if user_id in self.user_contexts:
             self.logging.info(f"[get_user] User(ID: {user_id} received from cache)")
             return self.user_contexts.get(user_id)
 
-        user_data = self.fetch_user_from_api(user_id)
+        user = self.fetch_user_from_api(user_id)
 
-        if user_data:
-            user = self.create_user_from_data(user_data)
+        if user:
             self.logging.info(f"[get_user] User(ID: {user_id}) received from api")
             self.user_contexts[user_id] = user  # Cache the user
             return user
@@ -111,9 +112,18 @@ class UserManager:
         self.user_contexts[user_id] = user
         return user
 
-    def fetch_user_from_api(self, user_id: int) -> str | None:
-        return '{"user_id":' + str(
-            user_id) + ',"videos": [{"title": "Sample Video","process_id": "123","stage": "started_initialized"},{"title": "Sample Video2","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video3","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video4","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video5","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video6","process_id": "1234","stage": "started_initialized"}],"allowed_to_use": true}'
+    def fetch_user_from_api(self, user_id: int) -> User | None:
+        # query api.
+        data = '{"user_id":' + str(
+            user_id) + ',"videos": [{"title": "Sample Video","process_id": "123","stage": "started_initialized"},{"title": "Sample Video2","process_id": "1234","stage": "started_initialized", "bullet_points": ["bullet1","bullet2","bullet3"]},{"title": "Sample Video3","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video4","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video5","process_id": "1234","stage": "started_initialized"},{"title": "Sample Video6","process_id": "1234","stage": "started_initialized"}],"allowed_to_use": true}'
+
+        user = self.create_user_from_data(data)
+
+        if not user:
+            self.logging.error(f"[fetch_user_from_api] Failed to validate user data {user_id}")
+            return None
+
+        return user
         # Simulate API call to fetch user data
         # response = requests.get(f"{API_ENDPOINT}/user/{user_id}")
         # if response.status_code == 200:

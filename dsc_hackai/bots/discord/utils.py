@@ -2,8 +2,8 @@ import enum
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple, Callable
-from pytubefix import YouTube
-
+# from pytubefix import YouTube
+from yt_dlp import YoutubeDL
 
 class States(enum.Enum):
     WAITING_FOR_VIDEO_ID = 1
@@ -43,13 +43,13 @@ class User:
 
 
 class VideoDownloadState(enum.Enum):
-    DOWNLOADED_SUCCESSFULLY = 0
     NO_VIDEO_ATTACHED = -1
-    ATTACHMENT_IS_NOT_VIDEO = -2
+    MULTIPLE_ATTACHMENTS = -2
     FAILED_TO_DOWNLOAD_VIDEO = -3
+    VIDEO_YT_LINK_TOGETHER = -4
 
 
-def download_youtube_video(youtube_url, progress_function: Callable | None = None):
+def download_youtube_video(user_id: int, youtube_url, progress_function: Callable | None = None):
     """
     Simulates processing a YouTube URL.
 
@@ -61,18 +61,29 @@ def download_youtube_video(youtube_url, progress_function: Callable | None = Non
         videos_dir = current_dir.parents[1] / "videos"
         videos_dir.mkdir(parents=True, exist_ok=True)
 
-        yt = YouTube(youtube_url)
+        downloaded_filename = None
 
-        if yt.age_restricted:
-            return 1, f"video: {youtube_url} is age restricted"
+        def progress_hook(d):
+            nonlocal downloaded_filename
+            if d['status'] == 'finished':
+                downloaded_filename = d['filename']
+            if progress_function:  # Only call the user-provided progress function if it's not None
+                progress_function(d)
 
-        file_name = f"{yt.video_id}.mp4"
+        args = {
+            # 'quiet': True,
+            'noplaylist': True,
+            'outtmpl': str(videos_dir / f'{user_id}_%(id)s.%(ext)s'),  # Save with video ID as the filename
+            'format': 'best',  # Download the best available quality
+            'progress_hooks': [progress_hook],  # Attach our custom progress hook,
+        }
 
-        if progress_function:
-            yt.register_on_progress_callback(progress_function)
-        video_stream = yt.streams.first()
+        with YoutubeDL(args) as ydl:
+            ydl.download(youtube_url)
+            if downloaded_filename:
+                return 0, downloaded_filename
 
-        video_stream.download(output_path=str(videos_dir), filename=file_name)
-        return 0, file_name
+            return 2, "Unable to determine the downloaded file name."
+
     except Exception as e:
         return 2, e
