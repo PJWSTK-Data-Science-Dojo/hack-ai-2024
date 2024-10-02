@@ -5,6 +5,7 @@ __pycache__
 TODO
 .pytest_cache
 dsc_hackai/processed_video
+*.logg
 
 # Ignore generated or temporary files managed by the Workbench
 .project/*
