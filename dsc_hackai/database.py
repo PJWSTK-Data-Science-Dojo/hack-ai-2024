@@ -35,6 +35,7 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     allowed_to_use = Column(Boolean, default=True)
 
+    videos = relationship("Video", back_populates="user")
 
-User.videos = relationship("Video", back_populates="user")
+
 Base.metadata.create_all(bind=engine)
