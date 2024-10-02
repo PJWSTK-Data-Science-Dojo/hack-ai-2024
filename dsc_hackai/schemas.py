@@ -80,3 +80,20 @@ class AudioVSResult(BaseModel):
 
 class AudioVSQueryResponse(BaseModel):
     result: AudioVSResult
+
+
+class VideoAnalysisStage(BaseModel):
+    analysis: str
+    stage: str
+
+    class Config:
+        from_attributes = True
+
+
+class VideoStage(BaseModel):
+    perc: float
+    video_stage: str
+    analysis_stages: List[VideoAnalysisStage]
+
+    class Config:
+        from_attributes = True

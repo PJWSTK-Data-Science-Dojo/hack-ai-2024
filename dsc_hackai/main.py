@@ -17,6 +17,8 @@ from schemas import (
     UserCreate,
     UserLoginResponse,
     UserResponse,
+    VideoAnalysisStage,
+    VideoStage,
 )
 
 
@@ -55,10 +57,18 @@ async def upload_video_for_analysis(user_id: int, video_file: UploadFile = File(
 
 @app.get("/api/v1/analysis/stage/{process_id}", tags=["Response Data"])
 async def get_processing_stage(process_id: str, db: Session = Depends(get_db)):
-    job = db.query(Video).filter(Video.process_id == process_id).first()
-    if job is None:
+    video: Video = db.query(Video).filter(Video.process_id == process_id).first()
+    if video is None:
         raise HTTPException(status_code=404, detail="Process not found.")
-    return {"stage": job.stage, "perc": job.perc}
+
+    return VideoStage(
+        video_stage=video.stage,
+        perc=video.perc,
+        analysis_stages=[
+            VideoAnalysisStage.model_validate(vstage)
+            for vstage in video.analysis_stages
+        ],
+    )
 
 
 @app.get("/api/v1/analysis/data/audio/transcription", tags=["Response Data"])
