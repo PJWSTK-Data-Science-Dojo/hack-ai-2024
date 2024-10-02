@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple, Callable
 # from pytubefix import YouTube
 from yt_dlp import YoutubeDL
 
+
 class States(enum.Enum):
     WAITING_FOR_VIDEO_ID = 1
     WAITING_FOR_PROCESSED_DATA = 2
@@ -17,13 +18,13 @@ class States(enum.Enum):
 class Video:
     title: str
     process_id: str
-    stage: str
     bullet_points: List[str] = field(default_factory=list)
+    stage: str = None
 
 
 @dataclass
 class User:
-    id: int
+    id: int  # db id
     state: States = States.IDLE
     videos: Optional[List[Video]] = field(default_factory=list)
     allowed_to_use: bool = True
@@ -31,7 +32,7 @@ class User:
 
     def get_currently_viewing_video(self) -> Optional[Video]:
         """USe this instead of accessing it via '.' (MUST)"""
-        if not self.video_exists(id):
+        if not self.video_exists(self.currently_viewing):
             return None
         return self.videos[self.currently_viewing]
 
@@ -40,6 +41,9 @@ class User:
 
     def video_exists(self, id: int) -> bool:
         return id in range(len(self.videos))
+
+    def get_last_video_id(self):
+        return len(self.videos) - 1
 
 
 class VideoDownloadState(enum.Enum):
@@ -87,3 +91,6 @@ def download_youtube_video(user_id: int, youtube_url, progress_function: Callabl
 
     except Exception as e:
         return 2, e
+
+if __name__ == '__main__':
+    help(YoutubeDL)

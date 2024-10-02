@@ -1,17 +1,24 @@
 import asyncio
 from pathlib import Path
-
+import aiohttp
 import requests
 from discord.ext import commands
 import discord
 import os
 from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 from utils import States, Video, download_youtube_video, VideoDownloadState
-
+import io
 if TYPE_CHECKING:
     from ..user import UserManager
+    from utils import User
 
-API_ENDPOINT = os.getenv("endpoint")
+host = os.getenv('HOST', 'localhost')  # Default to 'localhost' if not set
+port = os.getenv('PORT', '8080')  # Default to '8080' if not set
+
+# Construct the URL dynamically using the environment variables
+register = f"http://{host}:{port}/api/v1/register"
+analyze = f"http://{host}:{port}/api/v1/start_analysis"
+ask_llm = f"http://{host}:{port}/api/v1/analysis/ask/"  # add process id
 
 
 class VideoPaginationView(discord.ui.View):
@@ -35,7 +42,7 @@ class VideoPaginationView(discord.ui.View):
         for index, video in enumerate(paginated_videos, start=start_index + 1):
             self.embed.add_field(
                 name=f"**{index}. {video.title}**",
-                value=f"This is the value for video {index}.",  # CHANGE
+                value="",
                 inline=False
             )
 
@@ -73,32 +80,44 @@ class VideoPaginationView(discord.ui.View):
         return self.embed
 
 
-def make_api_call(data):
-    response = requests.post(API_ENDPOINT, json=data)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return f"API call failed with status {response.status_code}"
-
-
 class API_interaction(commands.Cog):
     def __init__(self, bot, logger: 'Logger', USM):
         self.bot = bot
         self.logging = logger
         self.USM: UserManager = USM
 
+    @commands.command()
+    async def start(self, ctx: commands.Context):
+        # register user
+        user_id = ctx.author.id
+        print(user_id)
+        print(type(user_id))
+        data = {"username": str(user_id)}
+        response = requests.post(url=register, json=data)
+        print(response.json())
+        print(response.status_code)
+        if response.status_code == 200:
+            response_date = response.json()
+            self.USM.delete_user(user_id)
+            user = self.USM.create_user_from_data(data=response_date, user_id=user_id)
+            self.USM.add_user(user_id=user_id, user=user)
+            self.logging.info(f"[/start] User was added to the database")
+        else:
+            self.logging.error(f"[/start] Something went wrong")
+
     @commands.command(brief="Shows a list of preprocessed videos", description="Shows a list of preprocessed videos")
     async def my_videos(self, ctx: commands.Context):
+        discord_id = ctx.author.id
         user = ctx.user
         videos: List[Video] = user.videos
 
         if not videos:
-            self.logging.warning(f"[/my_videos] User(ID: {user.id}) doesn't have videos preprocessed")
-            await ctx.reply(f'No videos available for {user.id}\n Use the **/summarize** command first.')
+            self.logging.warning(f"[/my_videos] User(ID: {discord_id}) doesn't have videos preprocessed")
+            await ctx.reply(f'No videos available for {discord_id}\n Use the **/summarize** command first.')
             return
 
         user.state = States.WAITING_FOR_VIDEO_ID
-        self.logging.info(f"[/my_videos] Successfully generated embed for user(ID: {user.id})")
+        self.logging.info(f"[/my_videos] Successfully generated embed for user(ID: {discord_id})")
         view = VideoPaginationView(videos, ctx)
         embed = view.create_embed()
         view.message = await ctx.send(embed=embed, view=view)
@@ -130,10 +149,9 @@ class API_interaction(commands.Cog):
         embed.set_footer(text=f"Information requested by: {ctx.author.display_name}")
 
         await ctx.send(embed=embed)
-        # here we should send an embed with pretty short description instead of generic ctx.send
         user.state = States.VIEWING_SUMMARY
         user.currently_viewing = video_id
-        self.USM.add_llm_user(user.id, process_id)
+        self.USM.add_llm_user(ctx.author.id, process_id)
         await ctx.send(
             f"You can now successfully query the llm for further questions regarding your video summarization.")
 
@@ -142,8 +160,9 @@ class API_interaction(commands.Cog):
         self.logging.info(f"[/stop] User(ID: {ctx.author.id})")
 
         user = ctx.user
+        discord_id = ctx.author.id
         user.state = States.IDLE
-        did_remove = self.USM.delete_llm_user(user.id)
+        did_remove = self.USM.delete_llm_user(discord_id)
         if not did_remove:
             self.logging.error(
                 f"[/stop] User(ID: {ctx.author.id}) somehow this user wasn't removed or he wasn't there in the first place")
@@ -152,11 +171,11 @@ class API_interaction(commands.Cog):
         current_video = user.get_currently_viewing_video()
         current_title = current_video.title if current_video else "You're a cheater."
 
-        self.logging.info(f"[/stop] User(ID: {user.id}) Successfully stopped viewing the summary.")
+        self.logging.info(f"[/stop] User(ID: {discord_id}) Successfully stopped viewing the summary.")
         await ctx.reply(f"You're no longer viewing the summary of a {current_title}")
         return True
 
-    async def process_attachment(self, ctx: commands.Context, video_link: Union[str, None]) -> Tuple[bool, Union[str, VideoDownloadState]]:
+    async def process_attachment(self, ctx: commands.Context, video_link: Union[str, None]) -> Tuple[bool, Union[Path, VideoDownloadState]]:
         """
             Processes an attachment or YouTube video link, downloading the video if possible.
 
@@ -233,7 +252,7 @@ class API_interaction(commands.Cog):
                 await video_attachment.save(file_path)
                 self.logging.info(
                     f"[process_attachment] User(ID: {ctx.author.id}) video saved successfully: {file_path.name}")
-                return True, file_path.name
+                return True, file_path
             except Exception as e:
                 self.logging.error(f"[process_attachment] Failed to save video for User(ID: {ctx.author.id}): {e}")
                 return False, VideoDownloadState.FAILED_TO_DOWNLOAD_VIDEO
@@ -275,41 +294,85 @@ class API_interaction(commands.Cog):
                 return
 
             # else everything went ok
-            self.logging.info(f"[/summarize] User(ID: {ctx.author.id}). Video has been downloaded successfully {info}")
+            self.logging.info(f"[/summarize] User(ID: {ctx.author.id}). Video has been downloaded successfully {info.name}")
             user.state = States.WAITING_FOR_PROCESSED_DATA
-            # here send this to the server
-            # process_id = yadayada
             await ctx.reply(
                 f"Your video has been downloaded successfully and now is being processed at the server. Please wait patiently")
-            # here we make like data = asyncio.create_task(coro) get the data
+
+            with open(info, 'rb') as video_file:
+                video_buffer = io.BytesIO(video_file.read())
+
+            # response = requests.post(analyze, files=files, json=data)
+            response = requests.post(
+                analyze,
+                params={"user_id": str(user.id)},
+                files=[("video_file", video_buffer)],
+            )
             # self.USM.add_video_to_user(user.id, data)
-            user.state = States.VIEWING_SUMMARY
-            # self.USM.add_llm_user(user.id, process_id)
-            await ctx.reply(f"You can now freely ask questions regarding your video.")
+
+            if response.status_code == 200:
+                process_response = response.json()
+                process_id = process_response["process_id"]
+                self.logging.info(f"Video processing started with ID: {process_id}")
+
+                video_date = {
+                    "title": info.name,
+                    "process_id": process_id,
+                }
+                self.USM.add_video_to_user(ctx.author.id, video_date)
+                user.currently_viewing = user.get_last_video_id()
+
+                user.state = States.VIEWING_SUMMARY
+                self.USM.add_llm_user(ctx.author.id, process_id)
+                await ctx.reply(f"You can now freely ask questions regarding your video.")
+
+            else:
+                self.logging.error(f"[/summarize] Video processing failed: {response.status_code} - {response.text}")
 
         except Exception as e:
             self.logging.error(f"[/summarize] User(ID: {ctx.author.id}). Error while downloading video: {str(e)}")
             return
 
     async def handle_llm_interaction(self, ctx):
-        # user = ctx.user
         self.logging.info(f"[LLM Interaction] User(ID: {ctx.author.id}) sent a message: {ctx.message.content}")
+        user = ctx.user
+        current_video: Video = user.get_currently_viewing_video()
 
-        # Perform LLM interaction and respond to user
-        llm_response = f"LLM Response to: {ctx.message.content}"
-        await ctx.send(llm_response)
+        if not current_video:
+            print("no video")
+            return
+
+        process_id = current_video.process_id
+        message = ctx.message.content
+
+        url = f"{ask_llm}/{process_id}"
+        json_data = {
+            "user_query": message
+        }
+        response = requests.post(
+            url,
+            json=json_data,
+        )
+        if response.status_code == 200:
+            process_response = response.json()
+            llm_response = process_response['response']
+            await ctx.send(llm_response)
+        else:
+            self.logging.error(f"[/handle_llm_interaction] Failed to process user vs llm text: {response.status_code} - {response.text}")
+            print(response.status_code)
+            print(response.json())
 
     @commands.command()
     async def toggle_llm(self, ctx: commands.Context):
         user = ctx.user
         if user.state != States.VIEWING_SUMMARY:
             user.state = States.VIEWING_SUMMARY
-            self.USM.add_llm_user(user.id)
+            self.USM.add_llm_user(ctx.author.id)
             self.logging.info(f"[/toggle_llm] switched state to viewing summary")
             return
         else:
             user.state = States.IDLE
-            self.USM.delete_llm_user(user.id)
+            self.USM.delete_llm_user(ctx.author.id)
             self.logging.info(f"[/toggle+llm] switched state to idle summary")
             return
 
