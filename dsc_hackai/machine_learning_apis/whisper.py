@@ -1,21 +1,21 @@
 import requests
 import logging
 
-# import whisperx
+import whisperx
 import os
 import torch
 
 
 class whisperx_transcriber:
     def __init__(self):
-        self.device = "cuda"
+        self.device = "cpu"
         self.hf_token = os.getenv("HF_TOKEN", None)
         self.batch_size = 16
         self.compute_type = "int8"
         self.model_a = None
         logging.info("Loading WhisperX model")
         self.model = whisperx.load_model(
-            "small",
+            "tiny",
             self.device,
             compute_type=self.compute_type,
             download_root="project/models/",
